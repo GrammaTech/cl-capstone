@@ -284,14 +284,20 @@ this instruction with cs_free(insn, 1)"
                             '(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00))
     (let ((handle (foreign-alloc 'capstone-handle))
           (instr* (foreign-alloc '(:pointer (:struct capstone-instruction)))))
-      (assert (eql :ok (cs-open :x86 :64 handle)))
-      (format t "Handle: ~x:~x~%" handle (mem-ref handle 'capstone-handle))
-      (format t "Disassembly:~%")
+      (assert (eql :ok (cs-open :x86 :64 handle)) (handle)
+              "Failed to open Capstone engine. ~a" (cs-errno handle))
       ;; NOTE: Memory fault at the location held in the memory pointed
-      ;;       to by the HANDLE pointer.
+      ;;       to by the HANDLE pointer.  This memory is accessible in
+      ;;       the C version.
+      (format t "Handle(open): ~x:~x:~x~%"
+              handle
+              (mem-ref handle 'capstone-handle)
+              (mem-ref (make-pointer (mem-ref handle 'capstone-handle)) :uint))
+      (format t "Disassembly:~%")
       (let ((count (cs-disasm (mem-ref handle 'capstone-handle)
                               bytes 7 #x1000 0 instr*)))
-        (assert (and (numberp count) (> count 0)))
+        (assert (and (numberp count) (> count 0)) (code handle)
+                "Failed to disassemble given code. ~a" (cs-errno handle))
         (dotimes (n count)
           (with-foreign-slots ((address mnemonic op_str)
                                (mem-aref instr* :pointer n)
