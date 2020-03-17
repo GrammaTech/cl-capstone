@@ -96,6 +96,25 @@
                                 ; used on M68HC12/HCS12
   (:M680X_HCS08 #.(ash 1 10)))  ; M680X Freescale/NXP HCS08 mode
 
+(defcfun "cs_version" :uint
+  "Return combined API version & major and minor version numbers.
+
+@major: major number of API version
+@minor: minor number of API version
+
+@return hexical number as (major << 8 | minor), which encodes both
+        major & minor versions.
+        NOTE: This returned value can be compared with version number made
+        with macro CS_MAKE_VERSION
+
+For example, second API version would return 1 in @major, and 1 in @minor
+The return value would be 0x0101
+
+NOTE: if you only care about returned value, but not major and minor values,
+set both @major & @minor arguments to NULL."
+  (major :int)
+  (minor :int))
+
 (defcfun "cs_open" capstone-error
   "Initialize CS handle: this must be done before any usage of CS.
 
