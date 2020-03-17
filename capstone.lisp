@@ -166,7 +166,7 @@ On failure, call cs_errno() for error code."
   (code :pointer)
   (code_size :uint)
   (address :uint64)
-  (count :uint)
+  (count size-t)
   (instructions (:pointer (:struct capstone-instruction))))
 
 (defcfun "cs_errno" capstone-error
@@ -185,7 +185,7 @@ Like glibc's errno, cs_errno might not retain its old value once accessed.
 @count: number of cs_insn structures returned by cs_disasm(), or 1
         to free memory allocated by cs_malloc()."
   (instructions (:pointer (:struct capstone-instruction)))
-  (count :uint))
+  (count size-t))
 
 
 ;;;; CLOS wrapper.
