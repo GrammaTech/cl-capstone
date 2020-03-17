@@ -1,6 +1,8 @@
 (defpackage :capstone
   (:use :gt :cffi)
-  (:import-from :static-vectors :with-static-vector)
+  (:import-from :static-vectors
+                :with-static-vector
+                :static-vector-pointer)
   (:export :disasm
            ;; Fields of the instruction object.
            :address :mnemonic :opstr))
@@ -13,9 +15,9 @@
 
 
 ;;;; CFFI definitions.
-(defctype size-t :unsigned-int)
+(defctype size-t :uint32)
 
-(defctype capstone-handle size-t
+(defctype capstone-handle :pointer
   "Capstone engine handle.")
 
 (defcstruct capstone-instruction
@@ -286,20 +288,16 @@ this instruction with cs_free(insn, 1)"
           (instr* (foreign-alloc '(:pointer (:struct capstone-instruction)))))
       (assert (eql :ok (cs-open :x86 :64 handle)) (handle)
               "Failed to open Capstone engine. ~a" (cs-errno handle))
-      ;; NOTE: Memory fault at the location held in the memory pointed
-      ;;       to by the HANDLE pointer.  This memory is accessible in
-      ;;       the C version.
-      (format t "Handle(open): ~x:~x:~x~%"
-              handle
-              (mem-ref handle 'capstone-handle)
-              (mem-ref (make-pointer (mem-ref handle 'capstone-handle)) :uint))
-      (format t "Disassembly:~%")
       (let ((count (cs-disasm (mem-ref handle 'capstone-handle)
-                              bytes 7 #x1000 0 instr*)))
+                              (static-vector-pointer code)
+                              7 #x1000 0 instr*)))
         (assert (and (numberp count) (> count 0)) (code handle)
                 "Failed to disassemble given code. ~a" (cs-errno handle))
+        (format t "Disassembly[~d]:~%" count)
         (dotimes (n count)
           (with-foreign-slots ((address mnemonic op_str)
                                (mem-aref instr* :pointer n)
                                (:struct capstone-instruction))
-            (format t "~x: ~a ~a~%" address mnemonic op_str)))))))
+            (format t "~x: ~a ~a~%" address
+                    (foreign-string-to-lisp mnemonic)
+                    (foreign-string-to-lisp op_str))))))))
