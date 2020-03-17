@@ -181,11 +181,51 @@ it encounters an invalid instruction).
 or 0 if this function failed to disassemble the given code
 
 On failure, call cs_errno() for error code."
-  (handle (:pointer capstone-handle))
-  (code :pointer)
-  (code_size :uint)
+  (handle capstone-handle)
+  (code (:pointer :uint8))
+  (code_size size-t)
   (address :uint64)
   (count size-t)
+  (instructions (:pointer (:pointer (:struct capstone-instruction)))))
+
+(defcfun "cs_disasm_iter" :boolean
+  "Fast API to disassemble binary code, given the code buffer, size, address
+and number of instructions to be decoded.
+This API puts the resulting instruction into a given cache in @insn.
+See tests/test_iter.c for sample code demonstrating this API.
+
+NOTE 1: this API will update @code, @size & @address to point to the next
+instruction in the input buffer. Therefore, it is convenient to use
+cs_disasm_iter() inside a loop to quickly iterate all the instructions.
+While decoding one instruction at a time can also be achieved with
+cs_disasm(count=1), some benchmarks shown that cs_disasm_iter() can be 30%
+faster on random input.
+
+NOTE 2: the cache in @insn can be created with cs_malloc() API.
+
+NOTE 3: for system with scarce memory to be dynamically allocated such as
+OS kernel or firmware, this API is recommended over cs_disasm(), which
+allocates memory based on the number of instructions to be disassembled.
+The reason is that with cs_disasm(), based on limited available memory,
+we have to calculate in advance how many instructions to be disassembled,
+which complicates things. This is especially troublesome for the case
+@count=0, when cs_disasm() runs uncontrollably (until either end of input
+buffer, or when it encounters an invalid instruction).
+
+@handle: handle returned by cs_open()
+@code: buffer containing raw binary code to be disassembled
+@size: size of above code
+@address: address of the first insn in given raw code buffer
+@insn: pointer to instruction to be filled in by this API.
+
+@return: true if this API successfully decode 1 instruction,
+or false otherwise.
+
+On failure, call cs_errno() for error code."
+  (handle capstone-handle)
+  (code (:pointer (:pointer :uint8)))
+  (size (:pointer size-t))
+  (address (:pointer :uint64))
   (instructions (:pointer (:struct capstone-instruction))))
 
 (defcfun "cs_errno" capstone-error
@@ -196,6 +236,15 @@ Like glibc's errno, cs_errno might not retain its old value once accessed.
 
 @return: error code of cs_err enum type (CS_ERR_*, see above)"
   (handle (:pointer capstone-handle)))
+
+(defcfun "cs_malloc" (:pointer (:struct capstone-instruction))
+  "Allocate memory for 1 instruction to be used by cs_disasm_iter().
+
+@handle: handle returned by cs_open()
+
+NOTE: when no longer in use, you can reclaim the memory allocated for
+this instruction with cs_free(insn, 1)"
+  (handle capstone-handle))
 
 (defcfun "cs_free" :void
   "Free memory allocated by cs_malloc() or cs_disasm() (argument @insn)
