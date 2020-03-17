@@ -12,10 +12,10 @@
 
 
 ;;;; CFFI definitions.
-(defctype capstone-handle :uint
-  "Capstone engine handle.")
-
 (defctype size-t :unsigned-int)
+
+(defctype capstone-handle size-t
+  "Capstone engine handle.")
 
 (defcstruct capstone-instruction
   "Detail information of disassembled instruction."
