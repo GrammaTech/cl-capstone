@@ -1,11 +1,3 @@
-(defpackage :capstone
-  (:use :gt :cffi)
-  (:import-from :static-vectors
-                :with-static-vector
-                :static-vector-pointer)
-  (:export :disasm
-           ;; Fields of the instruction object.
-           :address :mnemonic :opstr))
 (in-package :capstone)
 (in-readtable :curry-compose-reader-macros)
 
@@ -15,8 +7,6 @@
 
 
 ;;;; CFFI definitions.
-(defctype size-t :uint32)
-
 (defctype capstone-handle :pointer
   "Capstone engine handle.")
 
