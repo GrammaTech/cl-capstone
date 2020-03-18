@@ -11,18 +11,18 @@
   "Capstone engine handle.")
 
 (defcunion capstone-detail-arch-specific-instruction-info
-  (cs_x86 cs_x86) ; X86 architecture, including 16-bit, 32-bit & 64-bit mode
-  (cs_arm64 cs_arm64)      ; ARM64 architecture (aka AArch64)
-  (cs_arm cs_arm)          ; ARM architecture (including Thumb/Thumb2)
-  (cs_m68k cs_m68k)        ; M68K architecture
-  (cs_mips cs_mips)        ; MIPS architecture
-  (cs_ppc cs_ppc)          ; PowerPC architecture
-  (cs_sparc cs_sparc)      ; Sparc architecture
-  (cs_sysz cs_sysz)        ; SystemZ architecture
-  (cs_xcore cs_xcore)      ; XCore architecture
-  (cs_tms320c64x cs_tms320c64x)         ; TMS320C64x architecture
-  (cs_m680x cs_m680x)                   ; M680X architecture
-  (cs_evm cs_evm))                      ; Ethereum architecture
+  (cs_x86 (:struct cs_x86)) ; X86 architecture, including 16, 32, & 64-bit modes
+  (cs_arm64 (:struct cs_arm64))     ; ARM64 architecture (aka AArch64)
+  (cs_arm (:struct cs_arm)) ; ARM architecture (including Thumb/Thumb2)
+  (cs_m68k (:struct cs_m68k))             ; M68K architecture
+  (cs_mips (:struct cs_mips))             ; MIPS architecture
+  (cs_ppc (:struct cs_ppc))               ; PowerPC architecture
+  (cs_sparc (:struct cs_sparc))           ; Sparc architecture
+  (cs_sysz (:struct cs_sysz))             ; SystemZ architecture
+  (cs_xcore (:struct cs_xcore))           ; XCore architecture
+  (cs_tms320c64x (:struct cs_tms320c64x)) ; TMS320C64x architecture
+  (cs_m680x (:struct cs_m680x))           ; M680X architecture
+  (cs_evm (:struct cs_evm)))              ; Ethereum architecture
 
 (defcstruct capstone-detail
   "NOTE: All information in cs_detail is only available when CS_OPT_DETAIL = CS_OPT_ON
@@ -117,6 +117,17 @@ then update arch/ARCH/ARCHDisassembler.c accordingly"
                                 ; used on M68HC12/HCS12
   (:M680X_HCS08 #.(ash 1 10)))  ; M680X Freescale/NXP HCS08 mode
 
+(defcenum capstone-option-type
+  (:INVALID 0)         ; No option specified
+  :SYNTAX              ; Assembly output syntax
+  :DETAIL              ; Break down instruction structure into details
+  :MODE                ; Change engine's mode at run-time
+  :MEM                 ; User-defined dynamic memory related functions
+  :SKIPDATA ; Skip data when disassembling. Then engine is in SKIPDATA mode.
+  :SKIPDATA_SETUP    ; Setup user-defined function for SKIPDATA option
+  :MNEMONIC          ; Customize instruction mnemonic
+  :UNSIGNED)         ; print immediate operands in unsigned form
+
 (defcfun "cs_version" :uint
   "Return combined API version & major and minor version numbers.
 
@@ -135,6 +146,20 @@ NOTE: if you only care about returned value, but not major and minor values,
 set both @major & @minor arguments to NULL."
   (major :int)
   (minor :int))
+
+(defcfun "cs_support" :boolean
+  "This API can be used to either ask for archs supported by this library,
+or check to see if the library was compile with 'diet' option (or called
+in 'diet' mode).
+
+To check if a particular arch is supported by this library, set @query to
+arch mode (CS_ARCH_* value).
+To verify if this library supports all the archs, use CS_ARCH_ALL.
+
+To check if this library is in 'diet' mode, set @query to CS_SUPPORT_DIET.
+
+@return True if this library supports the given arch, or in 'diet' mode."
+  (query :int))
 
 (defcfun "cs_open" capstone-error
   "Initialize CS handle: this must be done before any usage of CS.
@@ -163,6 +188,41 @@ In fact,this API invalidate @handle by ZERO out its value (i.e *handle = 0).
 @return CS_ERR_OK on success, or other value on failure (refer to cs_err enum
 for detailed error)."
   (handle (:pointer capstone-handle)))
+
+(defcfun "cs_option" capstone-error
+  "Set option for disassembling engine at runtime
+
+@handle: handle returned by cs_open()
+@type: type of option to be set
+@value: option value corresponding with @type
+
+@return: CS_ERR_OK on success, or other value on failure.
+Refer to cs_err enum for detailed error.
+
+NOTE: in the case of CS_OPT_MEM, handle's value can be anything,
+so that cs_option(handle, CS_OPT_MEM, value) can (i.e must) be called
+even before cs_open()"
+  (handle capstone-handle)
+  (type capstone-option-type)
+  (value size-t))
+
+(defcfun "cs_errno" capstone-error
+  "Report the last error number when some API function fail.
+Like glibc's errno, cs_errno might not retain its old value once accessed.
+
+@handle: handle returned by cs_open()
+
+@return: error code of cs_err enum type (CS_ERR_*, see above)"
+  (handle (:pointer capstone-handle)))
+
+(defcfun "cs_strerror" :string
+  "Return a string describing given error code.
+
+@code: error code (see CS_ERR_* above)
+
+@return: returns a pointer to a string that describes the error code
+         passed in the argument @code"
+  (code capstone-error))
 
 (defcfun "cs_disasm" size-t
   "Disassemble binary code, given the code buffer, size, address
@@ -249,15 +309,6 @@ On failure, call cs_errno() for error code."
   (address (:pointer :uint64))
   (instructions (:pointer (:struct capstone-instruction))))
 
-(defcfun "cs_errno" capstone-error
-  "Report the last error number when some API function fail.
-Like glibc's errno, cs_errno might not retain its old value once accessed.
-
-@handle: handle returned by cs_open()
-
-@return: error code of cs_err enum type (CS_ERR_*, see above)"
-  (handle (:pointer capstone-handle)))
-
 (defcfun "cs_malloc" (:pointer (:struct capstone-instruction))
   "Allocate memory for 1 instruction to be used by cs_disasm_iter().
 
@@ -275,6 +326,169 @@ this instruction with cs_free(insn, 1)"
         to free memory allocated by cs_malloc()."
   (instructions (:pointer (:struct capstone-instruction)))
   (count size-t))
+
+(defcfun "cs_reg_name" :string
+  "Return friendly name of register in a string.
+Find the instruction id from header file of corresponding architecture (arm.h for ARM,
+x86.h for X86, ...)
+
+WARN: when in 'diet' mode, this API is irrelevant because engine does not
+store register name.
+
+@handle: handle returned by cs_open()
+@reg_id: register id
+
+@return: string name of the register, or NULL if @reg_id is invalid."
+  (handle capstone-handle)
+  (register-id :unsigned-int))
+
+(defcfun "cs_insn_name" :string
+  "Return friendly name of an instruction in a string.
+Find the instruction id from header file of corresponding architecture (arm.h for ARM, x86.h for X86, ...)
+
+WARN: when in 'diet' mode, this API is irrelevant because the engine does not
+store instruction name.
+
+@handle: handle returned by cs_open()
+@insn_id: instruction id
+
+@return: string name of the instruction, or NULL if @insn_id is invalid."
+  (handle capstone-handle)
+  (instruction-id :unsigned-int))
+
+(defcfun "cs_group_name" :string
+  "Return friendly name of a group id (that an instruction can belong to)
+Find the group id from header file of corresponding architecture (arm.h for ARM, x86.h for X86, ...)
+
+WARN: when in 'diet' mode, this API is irrelevant because the engine does not
+store group name.
+
+@handle: handle returned by cs_open()
+@group_id: group id
+
+@return: string name of the group, or NULL if @group_id is invalid."
+  (handle capstone-handle)
+  (group-id :unsigned-int))
+
+(defcfun "cs_insn_group" :boolean
+  "Check if a disassembled instruction belong to a particular group.
+Find the group id from header file of corresponding architecture (arm.h for ARM, x86.h for X86, ...)
+Internally, this simply verifies if @group_id matches any member of insn->groups array.
+
+NOTE: this API is only valid when detail option is ON (which is OFF by default).
+
+WARN: when in 'diet' mode, this API is irrelevant because the engine does not
+update @groups array.
+
+@handle: handle returned by cs_open()
+@insn: disassembled instruction structure received from cs_disasm() or cs_disasm_iter()
+@group_id: group that you want to check if this instruction belong to.
+
+@return: true if this instruction indeed belongs to the given group, or false otherwise."
+  (handle capstone-handle)
+  (instruction (:pointer (:struct capstone-instruction)))
+  (group-id :unsigned-int))
+
+(defcfun "cs_reg_read" :boolean
+  "Check if a disassembled instruction IMPLICITLY used a particular register.
+Find the register id from header file of corresponding architecture (arm.h for ARM, x86.h for X86, ...)
+Internally, this simply verifies if @reg_id matches any member of insn->regs_read array.
+
+NOTE: this API is only valid when detail option is ON (which is OFF by default)
+
+WARN: when in 'diet' mode, this API is irrelevant because the engine does not
+update @regs_read array.
+
+@insn: disassembled instruction structure received from cs_disasm() or cs_disasm_iter()
+@reg_id: register that you want to check if this instruction used it.
+
+@return: true if this instruction indeed implicitly used the given register, or false otherwise."
+  (handle capstone-handle)
+  (instruction (:pointer (:struct capstone-instruction)))
+  (register-id :unsigned-int))
+
+(defcfun "cs_reg_write" :boolean
+  "Check if a disassembled instruction IMPLICITLY modified a particular register.
+Find the register id from header file of corresponding architecture (arm.h for ARM, x86.h for X86, ...)
+Internally, this simply verifies if @reg_id matches any member of insn->regs_write array.
+
+NOTE: this API is only valid when detail option is ON (which is OFF by default)
+
+WARN: when in 'diet' mode, this API is irrelevant because the engine does not
+update @regs_write array.
+
+@insn: disassembled instruction structure received from cs_disasm() or cs_disasm_iter()
+@reg_id: register that you want to check if this instruction modified it.
+
+@return: true if this instruction indeed implicitly modified the given register, or false otherwise."
+  (handle capstone-handle)
+  (instruction (:pointer (:struct capstone-instruction)))
+  (register-id :unsigned-int))
+
+(defcfun "cs_op_count" :int
+  "Count the number of operands of a given type.
+Find the operand type in header file of corresponding architecture (arm.h for ARM, x86.h for X86, ...)
+
+NOTE: this API is only valid when detail option is ON (which is OFF by default)
+
+@handle: handle returned by cs_open()
+@insn: disassembled instruction structure received from cs_disasm() or cs_disasm_iter()
+@op_type: Operand type to be found.
+
+@return: number of operands of given type @op_type in instruction @insn,
+or -1 on failure."
+  (handle capstone-handle)
+  (instruction (:pointer (:struct capstone-instruction)))
+  (operand-type :unsigned-int))
+
+(defcfun "cs_op_index" :int
+  "Retrieve the position of operand of given type in <arch>.operands[] array.
+Later, the operand can be accessed using the returned position.
+Find the operand type in header file of corresponding architecture (arm.h for ARM, x86.h for X86, ...)
+
+NOTE: this API is only valid when detail option is ON (which is OFF by default)
+
+@handle: handle returned by cs_open()
+@insn: disassembled instruction structure received from cs_disasm() or cs_disasm_iter()
+@op_type: Operand type to be found.
+@position: position of the operand to be found. This must be in the range
+       		[1, cs_op_count(handle, insn, op_type)]
+
+@return: index of operand of given type @op_type in <arch>.operands[] array
+in instruction @insn, or -1 on failure."
+  (handle capstone-handle)
+  (instruction (:pointer (:struct capstone-instruction)))
+  (operand-type :unsigned-int)
+  (position :unsigned-int))
+
+#+broken
+(progn
+(defcstruct capstone-registers
+  (registers :uint16 :count 64))
+
+(defcfun "cs_regs_access" capstone-error
+  "Retrieve all the registers accessed by an instruction, either explicitly or
+implicitly.
+
+WARN: when in 'diet' mode, this API is irrelevant because engine does not
+store registers.
+
+@handle: handle returned by cs_open()
+@insn: disassembled instruction structure returned from cs_disasm() or cs_disasm_iter()
+@regs_read: on return, this array contains all registers read by instruction.
+@regs_read_count: number of registers kept inside @regs_read array.
+@regs_write: on return, this array contains all registers written by instruction.
+@regs_write_count: number of registers kept inside @regs_write array.
+
+@return CS_ERR_OK on success, or other value on failure (refer to cs_err enum
+for detailed error)."
+  (handle capstone-handle)
+  (instruction (:pointer (:struct capstone-instruction)))
+  (registers-read (:struct capstone-registers))
+  (registers-read-count (:pointer :uint8))
+  (registers-write (:struct capstone-registers))
+  (registers-write-count (:pointer :uint8)))
+)
 
 
 ;;;; CLOS wrapper.
