@@ -11,7 +11,7 @@
   "Capstone engine handle.")
 
 (defcunion capstone-detail-arch-specific-instruction-info
-  ;; TODO: Populate.
+  ;; TODO: Populate.  Is there a way to grovel a union in a struct?
   ;; cs_x86 x86;   ///< X86 architecture, including 16-bit, 32-bit & 64-bit mode
   ;; cs_arm64 arm64; ///< ARM64 architecture (aka AArch64)
   ;; cs_arm arm;     ///< ARM architecture (including Thumb/Thumb2)

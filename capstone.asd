@@ -13,7 +13,7 @@
     :class :package-inferred-system
     :defsystem-depends-on (:asdf-package-system :cffi-grovel)
     :components ((:file "package")
-                 (:grovel-file "grovel")
+                 (:cffi-grovel-file "grovel")
                  (:file "capstone"))
     :in-order-to ((test-op (test-op "capstone/test"))))
 
