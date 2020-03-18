@@ -20,15 +20,45 @@
 (defctype capstone-handle :pointer
   "Capstone engine handle.")
 
+(defcunion capstone-detail-arch-specific-instruction-info
+  ;; TODO: Populate.
+  ;; cs_x86 x86;   ///< X86 architecture, including 16-bit, 32-bit & 64-bit mode
+  ;; cs_arm64 arm64; ///< ARM64 architecture (aka AArch64)
+  ;; cs_arm arm;     ///< ARM architecture (including Thumb/Thumb2)
+  ;; cs_m68k m68k;   ///< M68K architecture
+  ;; cs_mips mips;   ///< MIPS architecture
+  ;; cs_ppc ppc;	    ///< PowerPC architecture
+  ;; cs_sparc sparc; ///< Sparc architecture
+  ;; cs_sysz sysz;   ///< SystemZ architecture
+  ;; cs_xcore xcore; ///< XCore architecture
+  ;; cs_tms320c64x tms320c64x;  ///< TMS320C64x architecture
+  ;; cs_m680x m680x; ///< M680X architecture
+  ;; cs_evm evm;	    ///< Ethereum architecture
+  (filler :pointer))
+
+(defcstruct capstone-detail
+  "NOTE: All information in cs_detail is only available when CS_OPT_DETAIL = CS_OPT_ON
+Initialized as memset(., 0, offsetof(cs_detail, ARCH)+sizeof(cs_ARCH))
+by ARCH_getInstruction in arch/ARCH/ARCHDisassembler.c
+if cs_detail changes, in particular if a field is added after the union,
+then update arch/ARCH/ARCHDisassembler.c accordingly"
+  (regs_read :uint16 :count 12) ; list of implicit registers read by this insn
+  (regs_read_count :uint8) ; number of implicit registers read by this insn
+  (regs_write :uint16 :count 20) ; list of implicit registers modified by this insn
+  (regs_write_count :uint8) ; number of implicit registers modified by this insn
+  (groups :uint8 :count 8)  ; list of group this instruction belong to
+  (groups_count :uint8)     ; number of groups this insn belongs to
+  (instruction-info (:union capstone-detail-arch-specific-instruction-info)))
+
 (defcstruct capstone-instruction
   "Detail information of disassembled instruction."
-  (id :int)
+  (id :unsigned-int)
   (address :uint64)
-  (size :uint64)
+  (size :uint16)
   (bytes :uint8 :count 16)
   (mnemonic :char :count 32)            ; CS_MNEMONIC_SIZE
-  (op_str :char :count 160)
-  (details :pointer))
+  (op-str :char :count 160)
+  (cs-detail (:pointer (:struct capstone-detail))))
 
 (defcenum capstone-error
   (:OK 0)    ; No error: everything was fine
@@ -295,18 +325,18 @@ this instruction with cs_free(insn, 1)"
                 "Failed to disassemble given code. ~a" (cs-errno handle))
         (format t "Disassembly[~d]:~%" count)
         (dotimes (n count)
-          (with-foreign-slots ((address mnemonic op_str)
+          (with-foreign-slots ((address mnemonic op-str)
                                (mem-aref instr** :pointer n)
                                (:struct capstone-instruction))
             (format t "0x~x: ~a ~a~%" address
                     (foreign-string-to-lisp mnemonic)
-                    (foreign-string-to-lisp op_str))))))))
+                    (foreign-string-to-lisp op-str))))))))
 
-(defun test-cs-disasm-iter ()
+(defun test-cs-disasm-iter (arch mode)
   (with-static-vector (code 8 :element-type '(unsigned-byte 8) :initial-contents
                             '(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00))
     (let ((handle (foreign-alloc 'capstone-handle)))
-      (assert (eql :ok (cs-open :x86 :64 handle)) (handle)
+      (assert (eql :ok (cs-open arch mode handle)) (handle)
               "Failed to open Capstone engine. ~a" (cs-errno handle))
       (let ((instr* (cs-malloc handle)))
         (with-foreign-object (code* :pointer)
@@ -321,9 +351,10 @@ this instruction with cs_free(insn, 1)"
                                                    address
                                                    instr*)))
                       (unless success (return))
-                      (with-foreign-slots ((address mnemonic op_str)
+                      (with-foreign-slots ((id address mnemonic op-str)
                                            instr*
                                            (:struct capstone-instruction))
-                        (format t "0x~x: ~a ~a~%" address
+                        (format t "0x~x: ~x ~x~%"
+                                address
                                 (foreign-string-to-lisp mnemonic)
-                                (foreign-string-to-lisp op_str))))))))))))
+                                (foreign-string-to-lisp op-str))))))))))))
