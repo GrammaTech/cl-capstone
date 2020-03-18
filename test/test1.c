@@ -18,8 +18,7 @@ int main(void)
   count = cs_disasm(handle, CODE, sizeof(CODE)-1, 0x1000, 0, &insn);
   /* NOTE: In the Common Lisp version the memory pointed to by the
    *       value of the HANDLE pointer is not accessible. */
-  printf("Handle(open): %p:%p:%p\n", &handle, handle, *((uint*)handle));
-  printf("Disassembly:\n");
+  printf("Disassembly[%d]:\n", count);
   if (count > 0) {
     size_t j;
     for (j = 0; j < count; j++) {

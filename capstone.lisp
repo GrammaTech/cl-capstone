@@ -146,7 +146,7 @@ In fact,this API invalidate @handle by ZERO out its value (i.e *handle = 0).
 for detailed error)."
   (handle (:pointer capstone-handle)))
 
-(defcfun "cs_disasm" :uint
+(defcfun "cs_disasm" size-t
   "Disassemble binary code, given the code buffer, size, address
 and number of instructions to be decoded.
 This API dynamically allocate memory to contain disassembled
@@ -281,23 +281,49 @@ this instruction with cs_free(insn, 1)"
 
 
 ;;;; Test.
-(defun test-disasm ()
+(defun test-cs-disasm ()
   (with-static-vector (code 8 :element-type '(unsigned-byte 8) :initial-contents
                             '(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00))
     (let ((handle (foreign-alloc 'capstone-handle))
-          (instr* (foreign-alloc '(:pointer (:struct capstone-instruction)))))
+          (instr** (foreign-alloc '(:pointer (:pointer (:struct capstone-instruction))))))
       (assert (eql :ok (cs-open :x86 :64 handle)) (handle)
               "Failed to open Capstone engine. ~a" (cs-errno handle))
       (let ((count (cs-disasm (mem-ref handle 'capstone-handle)
                               (static-vector-pointer code)
-                              7 #x1000 0 instr*)))
+                              7 #x1000 0 instr**)))
         (assert (and (numberp count) (> count 0)) (code handle)
                 "Failed to disassemble given code. ~a" (cs-errno handle))
         (format t "Disassembly[~d]:~%" count)
         (dotimes (n count)
           (with-foreign-slots ((address mnemonic op_str)
-                               (mem-aref instr* :pointer n)
+                               (mem-aref instr** :pointer n)
                                (:struct capstone-instruction))
-            (format t "~x: ~a ~a~%" address
+            (format t "0x~x: ~a ~a~%" address
                     (foreign-string-to-lisp mnemonic)
                     (foreign-string-to-lisp op_str))))))))
+
+(defun test-cs-disasm-iter ()
+  (with-static-vector (code 8 :element-type '(unsigned-byte 8) :initial-contents
+                            '(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00))
+    (let ((handle (foreign-alloc 'capstone-handle)))
+      (assert (eql :ok (cs-open :x86 :64 handle)) (handle)
+              "Failed to open Capstone engine. ~a" (cs-errno handle))
+      (let ((instr* (cs-malloc handle)))
+        (with-foreign-object (code* :pointer)
+          (with-foreign-object (size 'size-t)
+            (with-foreign-object (address :uint64)
+              (setf (mem-ref code* :pointer) (static-vector-pointer code)
+                    (mem-ref size 'size-t) 2
+                    (mem-ref address :uint64) #x1000)
+              (iter (let ((success (cs-disasm-iter (mem-ref handle 'capstone-handle)
+                                                   code*
+                                                   size
+                                                   address
+                                                   instr*)))
+                      (unless success (return))
+                      (with-foreign-slots ((address mnemonic op_str)
+                                           instr*
+                                           (:struct capstone-instruction))
+                        (format t "0x~x: ~a ~a~%" address
+                                (foreign-string-to-lisp mnemonic)
+                                (foreign-string-to-lisp op_str))))))))))))
