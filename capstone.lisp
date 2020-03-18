@@ -11,20 +11,18 @@
   "Capstone engine handle.")
 
 (defcunion capstone-detail-arch-specific-instruction-info
-  ;; TODO: Populate.  Is there a way to grovel a union in a struct?
-  ;; cs_x86 x86;   ///< X86 architecture, including 16-bit, 32-bit & 64-bit mode
-  ;; cs_arm64 arm64; ///< ARM64 architecture (aka AArch64)
-  ;; cs_arm arm;     ///< ARM architecture (including Thumb/Thumb2)
-  ;; cs_m68k m68k;   ///< M68K architecture
-  ;; cs_mips mips;   ///< MIPS architecture
-  ;; cs_ppc ppc;	    ///< PowerPC architecture
-  ;; cs_sparc sparc; ///< Sparc architecture
-  ;; cs_sysz sysz;   ///< SystemZ architecture
-  ;; cs_xcore xcore; ///< XCore architecture
-  ;; cs_tms320c64x tms320c64x;  ///< TMS320C64x architecture
-  ;; cs_m680x m680x; ///< M680X architecture
-  ;; cs_evm evm;	    ///< Ethereum architecture
-  (filler :pointer))
+  (cs_x86 cs_x86) ; X86 architecture, including 16-bit, 32-bit & 64-bit mode
+  (cs_arm64 cs_arm64)      ; ARM64 architecture (aka AArch64)
+  (cs_arm cs_arm)          ; ARM architecture (including Thumb/Thumb2)
+  (cs_m68k cs_m68k)        ; M68K architecture
+  (cs_mips cs_mips)        ; MIPS architecture
+  (cs_ppc cs_ppc)          ; PowerPC architecture
+  (cs_sparc cs_sparc)      ; Sparc architecture
+  (cs_sysz cs_sysz)        ; SystemZ architecture
+  (cs_xcore cs_xcore)      ; XCore architecture
+  (cs_tms320c64x cs_tms320c64x)         ; TMS320C64x architecture
+  (cs_m680x cs_m680x)                   ; M680X architecture
+  (cs_evm cs_evm))                      ; Ethereum architecture
 
 (defcstruct capstone-detail
   "NOTE: All information in cs_detail is only available when CS_OPT_DETAIL = CS_OPT_ON
