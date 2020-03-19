@@ -12,7 +12,9 @@
            :bytes
            :mnemonic
            :operands
-           :disasm))
+           ;; Disassembly functionality
+           :disasm
+           :disasm-iter))
 (in-package :capstone/clos)
 (in-readtable :curry-compose-reader-macros)
 #+debug (declaim (optimize (debug 3)))
@@ -108,6 +110,24 @@
       (mapcar (lambda (s) (parse-capstone-operand (trim-whitespace s)))
               (split-sequence #\, operands))))
 
+(defun make-instruction (insn)
+  (flet ((bytes (p)
+           (let ((r (make-array 16 :element-type '(unsigned-byte 8))))
+             (dotimes (n 16 r)
+               (setf (aref r n) (mem-aref p :uint8 n))))))
+    (make-instance 'capstone-instruction
+      :id (foreign-slot-value insn '(:struct cs-insn) 'id)
+      :address (foreign-slot-value insn '(:struct cs-insn) 'address)
+      :size (foreign-slot-value insn '(:struct cs-insn) 'insn-size)
+      :bytes (bytes (foreign-slot-value insn '(:struct cs-insn) 'bytes))
+      :mnemonic (nest (make-keyword)
+                      (string-upcase)
+                      (foreign-string-to-lisp)
+                      (foreign-slot-value insn '(:struct cs-insn) 'mnemonic))
+      :operands (nest (parse-capstone-operands)
+                      (foreign-string-to-lisp)
+                      (foreign-slot-value insn '(:struct cs-insn) 'op-str)))))
+
 (defgeneric disasm (engine bytes &key address count)
   (:documentation
    "Disassemble BYTES with ENGINE using starting address ADDRESS.
@@ -133,24 +153,35 @@ instructions disassembled.")
        (assert (and (numberp count) (> count 0)) (code handle)
                "Disassembly failed with ~S." (cs-strerror (cs-errno handle))))
      (let ((result (make-array count))))
-     (flet ((bytes (p)
-              (let ((r (make-array 16 :element-type '(unsigned-byte 8))))
-                (dotimes (n 16 r)
-                  (setf (aref r n) (mem-aref p :uint8 n)))))))
      (dotimes (n count result))
      (let ((insn (inc-pointer (mem-ref instr** :pointer)
                               (* n (foreign-type-size
                                     '(:struct cs-insn)))))))
      (setf (aref result n))
-     (make-instance 'capstone-instruction
-       :id (foreign-slot-value insn '(:struct cs-insn) 'id)
-       :address (foreign-slot-value insn '(:struct cs-insn) 'address)
-       :size (foreign-slot-value insn '(:struct cs-insn) 'insn-size)
-       :bytes (bytes (foreign-slot-value insn '(:struct cs-insn) 'bytes))
-       :mnemonic (nest (make-keyword)
-                       (string-upcase)
-                       (foreign-string-to-lisp)
-                       (foreign-slot-value insn '(:struct cs-insn) 'mnemonic))
-       :operands (nest (parse-capstone-operands)
-                       (foreign-string-to-lisp)
-                       (foreign-slot-value insn '(:struct cs-insn) 'op-str))))))
+     (make-instruction insn))))
+
+(defmacro disasm-iter ((var (engine bytes &key (address 0))) &body body)
+  "Use ENGINE to disassemble BYTES one instructions at a time.
+Bind each instruction to VAR when executing BODY.  Optional argument
+ADDRESS may be used to set the starting ADDRESS during disassembly."
+  (with-gensyms (code code* size* address* instr*)
+    (once-only ((full-bytes bytes))
+      `(with-slots (handle) ,engine
+         (with-static-vector (,code (length ,full-bytes)
+                                    :element-type '(unsigned-byte 8)
+                                    :initial-contents ,full-bytes)
+           (let ((,instr* (cs-malloc handle)))
+             (unwind-protect
+                  (with-foreign-object (,code* :pointer)
+                    (with-foreign-object (,size* 'size-t)
+                      (with-foreign-object (,address* :uint64)
+                        (setf (mem-ref ,code* :pointer)
+                              (static-vector-pointer ,code)
+                              (mem-ref ,size* 'size-t) (length ,full-bytes)
+                              (mem-ref ,address* :uint64) ,address)
+                        (loop (unless (cs-disasm-iter
+                                       (mem-ref handle 'cs-handle)
+                                       ,code* ,size* ,address* ,instr*)
+                                (return))
+                           (let ((,var (make-instruction ,instr*))) ,@body)))))
+               (cs-free ,instr* 1))))))))

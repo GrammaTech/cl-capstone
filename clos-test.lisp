@@ -19,3 +19,13 @@
                     (:MOV :RAX (:QWORD (:DEREF (:+ :RIP 5048))))))
           (map 'list «cons #'mnemonic #'operands»
                (disasm engine #(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00))))))
+
+(deftest simple-disasm-iter ()
+  (let ((engine (make-instance 'capstone-engine :architecture :x86 :mode :64)))
+    (disasm-iter (instruction (engine (make-array 50 :initial-element #x90)))
+      (is (eql (mnemonic instruction) :NOP)))
+    (let ((disasm '((:PUSH :RBP)
+                    (:MOV :RAX (:QWORD (:DEREF (:+ :RIP 5048)))))))
+      (disasm-iter (instruction (engine #(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00)))
+        (is (equalp (pop disasm)
+                    (cons (mnemonic instruction) (operands instruction))))))))
