@@ -18,7 +18,7 @@
     :name "capstone"
     :author "GrammaTech"
     :licence "MIT"
-    :description "Raw Common Lisp FFI interface to the Capstone decompiler"
+    :description "Raw Common Lisp FFI interface to the Capstone disassembler"
     :depends-on (:gt :cffi :static-vectors)
     :class :package-inferred-system
     :defsystem-depends-on (:asdf-package-system :cffi-grovel)
@@ -37,7 +37,7 @@
 (defsystem "capstone/clos"
   :author "GrammaTech"
   :licence "MIT"
-  :description "Common Lisp CLOS interface to the Capstone decompiler"
+  :description "Common Lisp CLOS interface to the Capstone disassembler"
   :perform
   (test-op (o c) (symbol-call :capstone/clos-test '#:test)))
 

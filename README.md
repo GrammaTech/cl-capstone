@@ -1,7 +1,7 @@
 CAPSTONE
 ========
 
-Common Lisp bindings to the Capstone decompiler (version 4).
+Common Lisp bindings to the Capstone disassembler (version 4).
 https://github.com/aquynh/capstone
 
 The CAPSTONE package provides raw access to the capstone C API from
