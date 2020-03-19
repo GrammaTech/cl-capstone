@@ -24,8 +24,15 @@
   (let ((engine (make-instance 'capstone-engine :architecture :x86 :mode :64)))
     (disasm-iter (instruction (engine (make-array 50 :initial-element #x90)))
       (is (eql (mnemonic instruction) :NOP)))
-    (let ((disasm '((:PUSH :RBP)
+    (let ((counter 0)
+          (disasm '((:PUSH :RBP)
                     (:MOV :RAX (:QWORD (:DEREF (:+ :RIP 5048)))))))
-      (disasm-iter (instruction (engine #(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00)))
-        (is (equalp (pop disasm)
-                    (cons (mnemonic instruction) (operands instruction))))))))
+      (nest
+       (is)
+       (= 2)                            ; Check the return form.
+       (disasm-iter
+           (instruction (engine #(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00)
+                                :return-form counter))
+         (incf counter)
+         (is (equalp (pop disasm)
+                     (cons (mnemonic instruction) (operands instruction)))))))))

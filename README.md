@@ -38,6 +38,6 @@ CAPSTONE/CLOS> (let ((counter 0))
                            (operands i))))
 1 0x0 PUSH RBP
 2 0x1 MOV RAX, (QWORD (DEREF (+ RIP 5048)))
-NIL
+; No value
 CAPSTONE/CLOS>
 ```

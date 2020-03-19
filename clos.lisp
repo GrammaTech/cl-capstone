@@ -160,7 +160,8 @@ instructions disassembled.")
      (setf (aref result n))
      (make-instruction insn))))
 
-(defmacro disasm-iter ((var (engine bytes &key (address 0))) &body body)
+(defmacro disasm-iter
+    ((var (engine bytes &key (address 0) (return-form '(values)))) &body body)
   "Use ENGINE to disassemble BYTES one instructions at a time.
 Bind each instruction to VAR when executing BODY.  Optional argument
 ADDRESS may be used to set the starting ADDRESS during disassembly."
@@ -182,6 +183,6 @@ ADDRESS may be used to set the starting ADDRESS during disassembly."
                         (loop (unless (cs-disasm-iter
                                        (mem-ref handle 'cs-handle)
                                        ,code* ,size* ,address* ,instr*)
-                                (return))
+                                (return ,return-form))
                            (let ((,var (make-instruction ,instr*))) ,@body)))))
                (cs-free ,instr* 1))))))))
