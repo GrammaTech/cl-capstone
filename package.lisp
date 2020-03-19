@@ -32,7 +32,7 @@
    :cs-insn
    :id
    :address
-   :size
+   :insn-size
    :bytes
    :mnemonic
    :op-str

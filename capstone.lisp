@@ -42,7 +42,7 @@ then update arch/ARCH/ARCHDisassembler.c accordingly"
   "Detail information of disassembled instruction."
   (id :unsigned-int)
   (address :uint64)
-  (size :uint16)
+  (insn-size :uint16)
   (bytes :uint8 :count 16)
   (mnemonic :char :count 32)            ; CS_MNEMONIC_SIZE
   (op-str :char :count 160)
