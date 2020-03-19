@@ -1,5 +1,5 @@
 (defpackage :capstone
-  (:use :gt :cffi)
+  (:use :common-lisp :cffi)
   (:import-from :static-vectors
                 :with-static-vector
                 :static-vector-pointer)

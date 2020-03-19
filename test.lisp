@@ -1,11 +1,11 @@
 (defpackage :capstone/test
-  (:use :gt :cffi :capstone :stefil)
+  (:use :common-lisp :cffi :capstone :stefil)
   (:import-from :static-vectors
                 :with-static-vector
                 :static-vector-pointer)
+  (:import-from :uiop :nest)
   (:export :test))
 (in-package :capstone/test)
-(in-readtable :curry-compose-reader-macros)
 
 (defsuite test)
 (in-suite test)
@@ -60,14 +60,14 @@
                (setf (mem-ref code* :pointer) (static-vector-pointer code)
                      (mem-ref size 'size-t) (length bytes)
                      (mem-ref address :uint64) #x1000)
-               (iter (unless (cs-disasm-iter (mem-ref handle 'cs-handle)
+               (loop (unless (cs-disasm-iter (mem-ref handle 'cs-handle)
                                              code*
                                              size
                                              address
                                              instr*) (return))
-                     (with-foreign-slots ((id address mnemonic op-str) instr*
-                                          (:struct cs-insn))
-                       (format t "0x~x: ~x ~x~%"
-                               address
-                               (foreign-string-to-lisp mnemonic)
-                               (foreign-string-to-lisp op-str))))))))))))
+                  (with-foreign-slots ((id address mnemonic op-str) instr*
+                                       (:struct cs-insn))
+                    (format t "0x~x: ~x ~x~%"
+                            address
+                            (foreign-string-to-lisp mnemonic)
+                            (foreign-string-to-lisp op-str))))))))))))

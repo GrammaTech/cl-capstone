@@ -1,5 +1,4 @@
 (in-package :capstone)
-(in-readtable :curry-compose-reader-macros)
 #+debug (declaim (optimize (debug 3)))
 
 (cffi:define-foreign-library libcapstone
