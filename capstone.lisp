@@ -11,7 +11,7 @@
 (defctype cs-handle :pointer
   "Capstone engine handle.")
 
-(defcunion capstone-detail-arch-specific-instruction-info
+(defcunion cs-detail-arch-specific-instruction-info
   (cs_x86 (:struct cs_x86)) ; X86 architecture, including 16, 32, & 64-bit modes
   (cs_arm64 (:struct cs_arm64))     ; ARM64 architecture (aka AArch64)
   (cs_arm (:struct cs_arm)) ; ARM architecture (including Thumb/Thumb2)
@@ -25,19 +25,19 @@
   (cs_m680x (:struct cs_m680x))           ; M680X architecture
   (cs_evm (:struct cs_evm)))              ; Ethereum architecture
 
-(defcstruct capstone-detail
+(defcstruct cs-detail
   "NOTE: All information in cs_detail is only available when CS_OPT_DETAIL = CS_OPT_ON
 Initialized as memset(., 0, offsetof(cs_detail, ARCH)+sizeof(cs_ARCH))
 by ARCH_getInstruction in arch/ARCH/ARCHDisassembler.c
 if cs_detail changes, in particular if a field is added after the union,
 then update arch/ARCH/ARCHDisassembler.c accordingly"
-  (regs_read :uint16 :count 12) ; list of implicit registers read by this insn
-  (regs_read_count :uint8) ; number of implicit registers read by this insn
-  (regs_write :uint16 :count 20) ; list of implicit registers modified by this insn
-  (regs_write_count :uint8) ; number of implicit registers modified by this insn
+  (regs-read :uint16 :count 12) ; list of implicit registers read by this insn
+  (regs-read-count :uint8) ; number of implicit registers read by this insn
+  (regs-write :uint16 :count 20) ; list of implicit registers modified by this insn
+  (regs-write-count :uint8) ; number of implicit registers modified by this insn
   (groups :uint8 :count 8)  ; list of group this instruction belong to
-  (groups_count :uint8)     ; number of groups this insn belongs to
-  (instruction-info (:union capstone-detail-arch-specific-instruction-info)))
+  (groups-count :uint8)     ; number of groups this insn belongs to
+  (instruction-info (:union cs-detail-arch-specific-instruction-info)))
 
 (defcstruct cs-insn
   "Detail information of disassembled instruction."
@@ -47,9 +47,9 @@ then update arch/ARCH/ARCHDisassembler.c accordingly"
   (bytes :uint8 :count 16)
   (mnemonic :char :count 32)            ; CS_MNEMONIC_SIZE
   (op-str :char :count 160)
-  (cs-detail (:pointer (:struct capstone-detail))))
+  (cs-detail (:pointer (:struct cs-detail))))
 
-(defcenum capstone-error
+(defcenum cs-error
   (:OK 0)    ; No error: everything was fine
   :MEM       ; Out-Of-Memory error: cs_open(), cs_disasm(), cs_disasm_iter()
   :ARCH      ; Unsupported architecture: cs_open()
@@ -66,7 +66,7 @@ then update arch/ARCH/ARCHDisassembler.c accordingly"
   :X86_INTEL ; X86 Intel syntax is unsupported (opt-out at compile time)
   :X86_MASM) ; X86 Intel syntax is unsupported (opt-out at compile time)
 
-(defcenum capstone-architecture
+(defcenum cs-architecture
   (:ARM 0)               ; ARM architecture (including Thumb, Thumb-2)
   :ARM64                 ; ARM-64, also called AArch64
   :MIPS                  ; Mips architecture
@@ -82,7 +82,7 @@ then update arch/ARCH/ARCHDisassembler.c accordingly"
   :MAX
   (:ALL #xFFFF))         ; All architectures - for cs_support()
 
-(defcenum capstone-mode
+(defcenum cs-mode
   (:LITTLE_ENDIAN 0)           ; little-endian mode (default mode)
   (:ARM 0)                     ; 32-bit ARM
   (:16 #.(ash 1 1))             ; 16-bit mode (X86)
@@ -118,7 +118,7 @@ then update arch/ARCH/ARCHDisassembler.c accordingly"
                                 ; used on M68HC12/HCS12
   (:M680X_HCS08 #.(ash 1 10)))  ; M680X Freescale/NXP HCS08 mode
 
-(defcenum capstone-option-type
+(defcenum cs-option-type
   (:INVALID 0)         ; No option specified
   :SYNTAX              ; Assembly output syntax
   :DETAIL              ; Break down instruction structure into details
@@ -162,7 +162,7 @@ To check if this library is in 'diet' mode, set @query to CS_SUPPORT_DIET.
 @return True if this library supports the given arch, or in 'diet' mode."
   (query :int))
 
-(defcfun "cs_open" capstone-error
+(defcfun "cs_open" cs-error
   "Initialize CS handle: this must be done before any usage of CS.
 
 @arch: architecture type (CS_ARCH_*)
@@ -171,11 +171,11 @@ To check if this library is in 'diet' mode, set @query to CS_SUPPORT_DIET.
 
 @return CS_ERR_OK on success, or other value on failure (refer to cs_err enum
 for detailed error)."
-  (arch capstone-architecture)
-  (mode capstone-mode)
+  (arch cs-architecture)
+  (mode cs-mode)
   (handle (:pointer cs-handle)))
 
-(defcfun "cs_close" capstone-error
+(defcfun "cs_close" cs-error
   "Close CS handle: MUST do to release the handle when it is not used anymore.
 NOTE: this must be only called when there is no longer usage of Capstone,
 not even access to cs_insn array. The reason is the this API releases some
@@ -190,7 +190,7 @@ In fact,this API invalidate @handle by ZERO out its value (i.e *handle = 0).
 for detailed error)."
   (handle (:pointer cs-handle)))
 
-(defcfun "cs_option" capstone-error
+(defcfun "cs_option" cs-error
   "Set option for disassembling engine at runtime
 
 @handle: handle returned by cs_open()
@@ -204,10 +204,10 @@ NOTE: in the case of CS_OPT_MEM, handle's value can be anything,
 so that cs_option(handle, CS_OPT_MEM, value) can (i.e must) be called
 even before cs_open()"
   (handle cs-handle)
-  (type capstone-option-type)
+  (type cs-option-type)
   (value size-t))
 
-(defcfun "cs_errno" capstone-error
+(defcfun "cs_errno" cs-error
   "Report the last error number when some API function fail.
 Like glibc's errno, cs_errno might not retain its old value once accessed.
 
@@ -223,7 +223,7 @@ Like glibc's errno, cs_errno might not retain its old value once accessed.
 
 @return: returns a pointer to a string that describes the error code
          passed in the argument @code"
-  (code capstone-error))
+  (code cs-error))
 
 (defcfun "cs_disasm" size-t
   "Disassemble binary code, given the code buffer, size, address
@@ -464,10 +464,10 @@ in instruction @insn, or -1 on failure."
 
 #+broken
 (progn
-(defcstruct capstone-registers
+(defcstruct cs-registers
   (registers :uint16 :count 64))
 
-(defcfun "cs_regs_access" capstone-error
+(defcfun "cs_regs_access" cs-error
   "Retrieve all the registers accessed by an instruction, either explicitly or
 implicitly.
 
@@ -485,82 +485,8 @@ store registers.
 for detailed error)."
   (handle cs-handle)
   (instruction (:pointer (:struct cs-insn)))
-  (registers-read (:struct capstone-registers))
+  (registers-read (:struct cs-registers))
   (registers-read-count (:pointer :uint8))
-  (registers-write (:struct capstone-registers))
+  (registers-write (:struct cs-registers))
   (registers-write-count (:pointer :uint8)))
 )
-
-
-;;;; CLOS wrapper.
-(defclass capstone-engine ()
-  ((architecture :reader architecture :type keyword)
-   (mode :reader mode :type keyword)
-   (cs-handle)))
-
-(defmethod initialize-instance :after ((capstone-engine capstone-engine) &key)
-  (assert (foreign-enum-value 'capstone-arch (architecture capstone-engine)))
-  (assert (foreign-enum-value 'capstone-mode (mode capstone-engine)))
-  (with-slots (architecture mode cs-handle) capstone-engine
-    (setf cs-handle (foreign-alloc 'cs-handle))
-    (assert (eql :ok (cs-open architecture mode cs-handle))
-            (architecture mode)
-            "Capstone Engine initialization with `cs-open' failed with ~a."
-            (cs-errno cs-handle)))
-  (sb-impl::finalize capstone-engine
-                     (lambda ()
-                       (with-slots (cs-handle) capstone-engine
-                         (cs-close cs-handle)))))
-
-
-;;;; Test.
-(defun run-cs-disasm (&optional (arch :x86) (mode :64)
-                        (bytes '(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00)))
-  (with-static-vector (code (length bytes) :element-type '(unsigned-byte 8)
-                            :initial-contents bytes)
-    (with-foreign-object (handle 'cs-handle)
-      (with-foreign-object (instr** '(:pointer (:pointer (:struct cs-insn))))
-        (assert (eql :ok (cs-open arch mode handle)) (handle)
-                "Failed to open Capstone engine. ~a" (cs-errno handle))
-        (let ((count (cs-disasm (mem-ref handle 'cs-handle)
-                                (static-vector-pointer code)
-                                (length bytes) #x1000 0 instr**)))
-          (assert (and (numberp count) (> count 0)) (code handle)
-                  "Failed to disassemble given code. ~a" (cs-errno handle))
-          (format t "Disassembly[~d]:~%" count)
-          (dotimes (n count)
-            (with-foreign-slots
-                ((address mnemonic op-str)
-                 (inc-pointer (mem-ref instr** :pointer)
-                              (* n (foreign-type-size '(:struct cs-insn))))
-                 (:struct cs-insn))
-              (format t "0x~x: ~a ~a~%" address
-                      (foreign-string-to-lisp mnemonic)
-                      (foreign-string-to-lisp op-str)))))))))
-
-(defun run-cs-disasm-iter (&optional (arch :x86) (mode :64)
-                             (bytes '(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00)))
-  (with-static-vector (code (length bytes)
-                            :element-type '(unsigned-byte 8)
-                            :initial-contents bytes)
-    (let ((handle (foreign-alloc 'cs-handle)))
-      (assert (eql :ok (cs-open arch mode handle)) (handle)
-              "Failed to open Capstone engine. ~a" (cs-errno handle))
-      (let ((instr* (cs-malloc handle)))
-        (with-foreign-object (code* :pointer)
-          (with-foreign-object (size 'size-t)
-            (with-foreign-object (address :uint64)
-              (setf (mem-ref code* :pointer) (static-vector-pointer code)
-                    (mem-ref size 'size-t) (length bytes)
-                    (mem-ref address :uint64) #x1000)
-              (iter (unless (cs-disasm-iter (mem-ref handle 'cs-handle)
-                                            code*
-                                            size
-                                            address
-                                            instr*) (return))
-                    (with-foreign-slots ((id address mnemonic op-str) instr*
-                                         (:struct cs-insn))
-                      (format t "0x~x: ~x ~x~%"
-                              address
-                              (foreign-string-to-lisp mnemonic)
-                              (foreign-string-to-lisp op-str)))))))))))
