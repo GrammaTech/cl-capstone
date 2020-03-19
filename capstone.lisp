@@ -1,5 +1,6 @@
 (in-package :capstone)
 (in-readtable :curry-compose-reader-macros)
+#+debug (declaim (optimize (debug 3)))
 
 (cffi:define-foreign-library libcapstone
   (t (:default "libcapstone")))
@@ -7,7 +8,7 @@
 
 
 ;;;; CFFI definitions.
-(defctype capstone-handle :pointer
+(defctype cs-handle :pointer
   "Capstone engine handle.")
 
 (defcunion capstone-detail-arch-specific-instruction-info
@@ -38,7 +39,7 @@ then update arch/ARCH/ARCHDisassembler.c accordingly"
   (groups_count :uint8)     ; number of groups this insn belongs to
   (instruction-info (:union capstone-detail-arch-specific-instruction-info)))
 
-(defcstruct capstone-instruction
+(defcstruct cs-insn
   "Detail information of disassembled instruction."
   (id :unsigned-int)
   (address :uint64)
@@ -172,7 +173,7 @@ To check if this library is in 'diet' mode, set @query to CS_SUPPORT_DIET.
 for detailed error)."
   (arch capstone-architecture)
   (mode capstone-mode)
-  (handle (:pointer capstone-handle)))
+  (handle (:pointer cs-handle)))
 
 (defcfun "cs_close" capstone-error
   "Close CS handle: MUST do to release the handle when it is not used anymore.
@@ -187,7 +188,7 @@ In fact,this API invalidate @handle by ZERO out its value (i.e *handle = 0).
 
 @return CS_ERR_OK on success, or other value on failure (refer to cs_err enum
 for detailed error)."
-  (handle (:pointer capstone-handle)))
+  (handle (:pointer cs-handle)))
 
 (defcfun "cs_option" capstone-error
   "Set option for disassembling engine at runtime
@@ -202,7 +203,7 @@ Refer to cs_err enum for detailed error.
 NOTE: in the case of CS_OPT_MEM, handle's value can be anything,
 so that cs_option(handle, CS_OPT_MEM, value) can (i.e must) be called
 even before cs_open()"
-  (handle capstone-handle)
+  (handle cs-handle)
   (type capstone-option-type)
   (value size-t))
 
@@ -213,7 +214,7 @@ Like glibc's errno, cs_errno might not retain its old value once accessed.
 @handle: handle returned by cs_open()
 
 @return: error code of cs_err enum type (CS_ERR_*, see above)"
-  (handle (:pointer capstone-handle)))
+  (handle (:pointer cs-handle)))
 
 (defcfun "cs_strerror" :string
   "Return a string describing given error code.
@@ -262,12 +263,12 @@ it encounters an invalid instruction).
 or 0 if this function failed to disassemble the given code
 
 On failure, call cs_errno() for error code."
-  (handle capstone-handle)
+  (handle cs-handle)
   (code (:pointer :uint8))
   (code_size size-t)
   (address :uint64)
   (count size-t)
-  (instructions (:pointer (:pointer (:struct capstone-instruction)))))
+  (instructions (:pointer (:pointer (:struct cs-insn)))))
 
 (defcfun "cs_disasm_iter" :boolean
   "Fast API to disassemble binary code, given the code buffer, size, address
@@ -303,20 +304,20 @@ buffer, or when it encounters an invalid instruction).
 or false otherwise.
 
 On failure, call cs_errno() for error code."
-  (handle capstone-handle)
+  (handle cs-handle)
   (code (:pointer (:pointer :uint8)))
   (size (:pointer size-t))
   (address (:pointer :uint64))
-  (instructions (:pointer (:struct capstone-instruction))))
+  (instructions (:pointer (:struct cs-insn))))
 
-(defcfun "cs_malloc" (:pointer (:struct capstone-instruction))
+(defcfun "cs_malloc" (:pointer (:struct cs-insn))
   "Allocate memory for 1 instruction to be used by cs_disasm_iter().
 
 @handle: handle returned by cs_open()
 
 NOTE: when no longer in use, you can reclaim the memory allocated for
 this instruction with cs_free(insn, 1)"
-  (handle capstone-handle))
+  (handle cs-handle))
 
 (defcfun "cs_free" :void
   "Free memory allocated by cs_malloc() or cs_disasm() (argument @insn)
@@ -324,7 +325,7 @@ this instruction with cs_free(insn, 1)"
 @insn: pointer returned by @insn argument in cs_disasm() or cs_malloc()
 @count: number of cs_insn structures returned by cs_disasm(), or 1
         to free memory allocated by cs_malloc()."
-  (instructions (:pointer (:struct capstone-instruction)))
+  (instructions (:pointer (:struct cs-insn)))
   (count size-t))
 
 (defcfun "cs_reg_name" :string
@@ -339,7 +340,7 @@ store register name.
 @reg_id: register id
 
 @return: string name of the register, or NULL if @reg_id is invalid."
-  (handle capstone-handle)
+  (handle cs-handle)
   (register-id :unsigned-int))
 
 (defcfun "cs_insn_name" :string
@@ -353,7 +354,7 @@ store instruction name.
 @insn_id: instruction id
 
 @return: string name of the instruction, or NULL if @insn_id is invalid."
-  (handle capstone-handle)
+  (handle cs-handle)
   (instruction-id :unsigned-int))
 
 (defcfun "cs_group_name" :string
@@ -367,7 +368,7 @@ store group name.
 @group_id: group id
 
 @return: string name of the group, or NULL if @group_id is invalid."
-  (handle capstone-handle)
+  (handle cs-handle)
   (group-id :unsigned-int))
 
 (defcfun "cs_insn_group" :boolean
@@ -385,8 +386,8 @@ update @groups array.
 @group_id: group that you want to check if this instruction belong to.
 
 @return: true if this instruction indeed belongs to the given group, or false otherwise."
-  (handle capstone-handle)
-  (instruction (:pointer (:struct capstone-instruction)))
+  (handle cs-handle)
+  (instruction (:pointer (:struct cs-insn)))
   (group-id :unsigned-int))
 
 (defcfun "cs_reg_read" :boolean
@@ -403,8 +404,8 @@ update @regs_read array.
 @reg_id: register that you want to check if this instruction used it.
 
 @return: true if this instruction indeed implicitly used the given register, or false otherwise."
-  (handle capstone-handle)
-  (instruction (:pointer (:struct capstone-instruction)))
+  (handle cs-handle)
+  (instruction (:pointer (:struct cs-insn)))
   (register-id :unsigned-int))
 
 (defcfun "cs_reg_write" :boolean
@@ -421,8 +422,8 @@ update @regs_write array.
 @reg_id: register that you want to check if this instruction modified it.
 
 @return: true if this instruction indeed implicitly modified the given register, or false otherwise."
-  (handle capstone-handle)
-  (instruction (:pointer (:struct capstone-instruction)))
+  (handle cs-handle)
+  (instruction (:pointer (:struct cs-insn)))
   (register-id :unsigned-int))
 
 (defcfun "cs_op_count" :int
@@ -437,8 +438,8 @@ NOTE: this API is only valid when detail option is ON (which is OFF by default)
 
 @return: number of operands of given type @op_type in instruction @insn,
 or -1 on failure."
-  (handle capstone-handle)
-  (instruction (:pointer (:struct capstone-instruction)))
+  (handle cs-handle)
+  (instruction (:pointer (:struct cs-insn)))
   (operand-type :unsigned-int))
 
 (defcfun "cs_op_index" :int
@@ -456,8 +457,8 @@ NOTE: this API is only valid when detail option is ON (which is OFF by default)
 
 @return: index of operand of given type @op_type in <arch>.operands[] array
 in instruction @insn, or -1 on failure."
-  (handle capstone-handle)
-  (instruction (:pointer (:struct capstone-instruction)))
+  (handle cs-handle)
+  (instruction (:pointer (:struct cs-insn)))
   (operand-type :unsigned-int)
   (position :unsigned-int))
 
@@ -482,8 +483,8 @@ store registers.
 
 @return CS_ERR_OK on success, or other value on failure (refer to cs_err enum
 for detailed error)."
-  (handle capstone-handle)
-  (instruction (:pointer (:struct capstone-instruction)))
+  (handle cs-handle)
+  (instruction (:pointer (:struct cs-insn)))
   (registers-read (:struct capstone-registers))
   (registers-read-count (:pointer :uint8))
   (registers-write (:struct capstone-registers))
@@ -501,7 +502,7 @@ for detailed error)."
   (assert (foreign-enum-value 'capstone-arch (architecture capstone-engine)))
   (assert (foreign-enum-value 'capstone-mode (mode capstone-engine)))
   (with-slots (architecture mode cs-handle) capstone-engine
-    (setf cs-handle (foreign-alloc 'capstone-handle))
+    (setf cs-handle (foreign-alloc 'cs-handle))
     (assert (eql :ok (cs-open architecture mode cs-handle))
             (architecture mode)
             "Capstone Engine initialization with `cs-open' failed with ~a."
@@ -513,31 +514,36 @@ for detailed error)."
 
 
 ;;;; Test.
-(defun test-cs-disasm ()
-  (with-static-vector (code 8 :element-type '(unsigned-byte 8) :initial-contents
-                            '(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00))
-    (let ((handle (foreign-alloc 'capstone-handle))
-          (instr** (foreign-alloc '(:pointer (:pointer (:struct capstone-instruction))))))
-      (assert (eql :ok (cs-open :x86 :64 handle)) (handle)
-              "Failed to open Capstone engine. ~a" (cs-errno handle))
-      (let ((count (cs-disasm (mem-ref handle 'capstone-handle)
-                              (static-vector-pointer code)
-                              7 #x1000 0 instr**)))
-        (assert (and (numberp count) (> count 0)) (code handle)
-                "Failed to disassemble given code. ~a" (cs-errno handle))
-        (format t "Disassembly[~d]:~%" count)
-        (dotimes (n count)
-          (with-foreign-slots ((address mnemonic op-str)
-                               (mem-aref instr** :pointer n)
-                               (:struct capstone-instruction))
-            (format t "0x~x: ~a ~a~%" address
-                    (foreign-string-to-lisp mnemonic)
-                    (foreign-string-to-lisp op-str))))))))
+(defun run-cs-disasm (&optional (arch :x86) (mode :64)
+                        (bytes '(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00)))
+  (with-static-vector (code (length bytes) :element-type '(unsigned-byte 8)
+                            :initial-contents bytes)
+    (with-foreign-object (handle 'cs-handle)
+      (with-foreign-object (instr** '(:pointer (:pointer (:struct cs-insn))))
+        (assert (eql :ok (cs-open arch mode handle)) (handle)
+                "Failed to open Capstone engine. ~a" (cs-errno handle))
+        (let ((count (cs-disasm (mem-ref handle 'cs-handle)
+                                (static-vector-pointer code)
+                                (length bytes) #x1000 0 instr**)))
+          (assert (and (numberp count) (> count 0)) (code handle)
+                  "Failed to disassemble given code. ~a" (cs-errno handle))
+          (format t "Disassembly[~d]:~%" count)
+          (dotimes (n count)
+            (with-foreign-slots
+                ((address mnemonic op-str)
+                 (inc-pointer (mem-ref instr** :pointer)
+                              (* n (foreign-type-size '(:struct cs-insn))))
+                 (:struct cs-insn))
+              (format t "0x~x: ~a ~a~%" address
+                      (foreign-string-to-lisp mnemonic)
+                      (foreign-string-to-lisp op-str)))))))))
 
-(defun test-cs-disasm-iter (arch mode)
-  (with-static-vector (code 8 :element-type '(unsigned-byte 8) :initial-contents
-                            '(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00))
-    (let ((handle (foreign-alloc 'capstone-handle)))
+(defun run-cs-disasm-iter (&optional (arch :x86) (mode :64)
+                             (bytes '(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00)))
+  (with-static-vector (code (length bytes)
+                            :element-type '(unsigned-byte 8)
+                            :initial-contents bytes)
+    (let ((handle (foreign-alloc 'cs-handle)))
       (assert (eql :ok (cs-open arch mode handle)) (handle)
               "Failed to open Capstone engine. ~a" (cs-errno handle))
       (let ((instr* (cs-malloc handle)))
@@ -545,18 +551,16 @@ for detailed error)."
           (with-foreign-object (size 'size-t)
             (with-foreign-object (address :uint64)
               (setf (mem-ref code* :pointer) (static-vector-pointer code)
-                    (mem-ref size 'size-t) 2
+                    (mem-ref size 'size-t) (length bytes)
                     (mem-ref address :uint64) #x1000)
-              (iter (let ((success (cs-disasm-iter (mem-ref handle 'capstone-handle)
-                                                   code*
-                                                   size
-                                                   address
-                                                   instr*)))
-                      (unless success (return))
-                      (with-foreign-slots ((id address mnemonic op-str)
-                                           instr*
-                                           (:struct capstone-instruction))
-                        (format t "0x~x: ~x ~x~%"
-                                address
-                                (foreign-string-to-lisp mnemonic)
-                                (foreign-string-to-lisp op-str))))))))))))
+              (iter (unless (cs-disasm-iter (mem-ref handle 'cs-handle)
+                                            code*
+                                            size
+                                            address
+                                            instr*) (return))
+                    (with-foreign-slots ((id address mnemonic op-str) instr*
+                                         (:struct cs-insn))
+                      (format t "0x~x: ~x ~x~%"
+                              address
+                              (foreign-string-to-lisp mnemonic)
+                              (foreign-string-to-lisp op-str)))))))))))
