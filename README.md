@@ -16,12 +16,6 @@ For example:
 CAPSTONE/CLOS> (version)
 4
 0
-CAPSTONE/CLOS> (disasm engine #(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00))
-#(#<CAPSTONE-INSTRUCTION (:PUSH :RBP)>
-  #<CAPSTONE-INSTRUCTION (:MOV :RAX (:QWORD (:DEREF (:+ :RIP 5048))))>)
-CAPSTONE/CLOS> (version)
-4
-0
 CAPSTONE/CLOS> (defparameter engine
                  (make-instance 'capstone-engine :architecture :x86 :mode :64))
 ENGINE
