@@ -22,34 +22,6 @@
 (defctype cs-handle :pointer
   "Capstone engine handle.")
 
-(defcunion cs-detail-arch-specific-instruction-info
-  (cs_x86 (:struct cs_x86)) ; X86 architecture, including 16, 32, & 64-bit modes
-  (cs_arm64 (:struct cs_arm64))     ; ARM64 architecture (aka AArch64)
-  (cs_arm (:struct cs_arm)) ; ARM architecture (including Thumb/Thumb2)
-  (cs_m68k (:struct cs_m68k))             ; M68K architecture
-  (cs_mips (:struct cs_mips))             ; MIPS architecture
-  (cs_ppc (:struct cs_ppc))               ; PowerPC architecture
-  (cs_sparc (:struct cs_sparc))           ; Sparc architecture
-  (cs_sysz (:struct cs_sysz))             ; SystemZ architecture
-  (cs_xcore (:struct cs_xcore))           ; XCore architecture
-  (cs_tms320c64x (:struct cs_tms320c64x)) ; TMS320C64x architecture
-  (cs_m680x (:struct cs_m680x))           ; M680X architecture
-  (cs_evm (:struct cs_evm)))              ; Ethereum architecture
-
-(defcstruct cs-detail
-  "NOTE: All information in cs_detail is only available when CS_OPT_DETAIL = CS_OPT_ON
-Initialized as memset(., 0, offsetof(cs_detail, ARCH)+sizeof(cs_ARCH))
-by ARCH_getInstruction in arch/ARCH/ARCHDisassembler.c
-if cs_detail changes, in particular if a field is added after the union,
-then update arch/ARCH/ARCHDisassembler.c accordingly"
-  (regs-read :uint16 :count 12) ; list of implicit registers read by this insn
-  (regs-read-count :uint8) ; number of implicit registers read by this insn
-  (regs-write :uint16 :count 20) ; list of implicit registers modified by this insn
-  (regs-write-count :uint8) ; number of implicit registers modified by this insn
-  (groups :uint8 :count 8)  ; list of group this instruction belong to
-  (groups-count :uint8)     ; number of groups this insn belongs to
-  (instruction-info (:union cs-detail-arch-specific-instruction-info)))
-
 (defcstruct cs-insn
   "Detail information of disassembled instruction."
   (id :unsigned-int)
