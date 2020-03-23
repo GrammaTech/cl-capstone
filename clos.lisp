@@ -13,6 +13,8 @@
 (defpackage :capstone/clos
   (:use :gt :cffi :static-vectors :capstone)
   (:export :version
+           :capstone
+           :disassembly
            ;; CAPSTONE-ENGINE class and accessors
            :capstone-engine
            :architecture
@@ -36,6 +38,20 @@
   (let* ((encoded-version (cs-version 0 0))
          (major (ash encoded-version -8)))
     (values major (- encoded-version (ash major 8)))))
+
+(define-condition capstone (error)
+  ((code :initarg :code :initform nil :reader code)
+   (strerr :initarg :strerr :initform nil :reader strerr))
+  (:report (lambda (condition stream)
+             (format stream "Capstone error ~S." (strerr condition))))
+  (:documentation "Capstone error."))
+
+(define-condition disassembly (capstone)
+  ((bytes :initarg :bytes :initform nil :reader bytes))
+  (:report (lambda (condition stream)
+             (format stream "Disassembly error ~S on ~S."
+                     (strerr condition) (bytes condition))))
+  (:documentation "Capstone disassembly error."))
 
 (defclass capstone-engine ()
   ((architecture :initarg :architecture :reader architecture :type keyword
@@ -162,8 +178,14 @@ instructions disassembled.")
      (let ((count (cs-disasm (mem-ref handle 'cs-handle)
                              (static-vector-pointer code)
                              (length bytes) address 0 instr**)))
-       (assert (and (numberp count) (> count 0)) (code handle)
-               "Disassembly failed with ~S." (cs-strerror (cs-errno handle))))
+       (unless (and (numberp count) (> count 0))
+         (let ((errno (cs-errno handle)))
+           (case errno
+             (:ok (warn "Empty disassembly of ~S." code))
+             (t (error (make-condition 'disassembly
+                                       :code errno
+                                       :strerr (cs-strerror errno)
+                                       :bytes code)))))))
      (let ((result (make-array count))))
      (dotimes (n count result))
      (let ((insn (inc-pointer (mem-ref instr** :pointer)
