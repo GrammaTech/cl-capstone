@@ -63,10 +63,11 @@
 (defmethod initialize-instance :after ((engine capstone-engine) &key)
   (with-slots (architecture mode handle) engine
     (setf handle (foreign-alloc 'cs-handle))
-    (assert (eql :ok (cs-open architecture mode handle))
-            (architecture mode)
-            "Capstone Engine initialization with `cs-open' failed with ~S."
-            (cs-strerror (cs-errno handle))))
+    (let ((errno (cs-open architecture mode handle)))
+      (unless (eql :ok errno)
+        (error (make-condition 'capstone
+                               :code errno
+                               :strerr (cs-strerror errno))))))
   #+sbcl (sb-impl::finalize engine
                             (lambda ()
                               (with-slots (handle) engine
