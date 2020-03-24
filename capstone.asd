@@ -25,25 +25,12 @@
     :components ((:file "package")
                  (:cffi-grovel-file "grovel")
                  (:file "capstone"))
-    :in-order-to ((test-op (test-op "capstone/test"))))
-
-(defsystem "capstone/test"
-  :author "GrammaTech"
-  :licence "MIT"
-  :description "Test the CAPSTONE package."
-  :perform
-  (test-op (o c) (symbol-call :capstone/test '#:test)))
+    :in-order-to ((test-op (load-op "capstone/test")))
+    :perform (test-op (o c) (symbol-call :capstone/test '#:test)))
 
 (defsystem "capstone/clos"
   :author "GrammaTech"
   :licence "MIT"
   :description "Common Lisp CLOS interface to the Capstone disassembler"
-  :perform
-  (test-op (o c) (symbol-call :capstone/clos-test '#:test)))
-
-(defsystem "capstone/clos-test"
-  :author "GrammaTech"
-  :licence "MIT"
-  :description "Test the CAPSTONE/CLOS package."
-  :perform
-  (test-op (o c) (symbol-call :capstone/clos-test '#:test)))
+  :in-order-to ((test-op (load-op "capstone/clos-test")))
+  :perform (test-op (o c) (symbol-call :capstone/clos-test '#:test)))
