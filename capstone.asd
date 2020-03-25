@@ -32,5 +32,6 @@
   :author "GrammaTech"
   :licence "MIT"
   :description "Common Lisp CLOS interface to the Capstone disassembler"
+  :depends-on (:capstone)
   :in-order-to ((test-op (load-op "capstone/clos-test")))
   :perform (test-op (o c) (symbol-call :capstone/clos-test '#:test)))
