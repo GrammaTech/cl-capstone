@@ -15,23 +15,35 @@
 (use-package 'cffi-grovel)
 
 (defsystem "capstone"
+  :author "GrammaTech"
+  :licence "MIT"
+  :description "Common Lisp CLOS interface to the Capstone disassembler"
+  :depends-on (:gt :cffi :static-vectors :capstone/raw)
+  :components ((:file "capstone"))
+  :in-order-to ((test-op (load-op "capstone/test")))
+  :perform (test-op (o c) (symbol-call :capstone/test '#:test)))
+
+(defsystem "capstone/test"
+  :author "GrammaTech"
+  :licence "MIT"
+  :depends-on (:gt :cffi :capstone/raw :capstone :stefil)
+  :components ((:file "test")))
+
+(defsystem "capstone/raw"
     :name "capstone"
     :author "GrammaTech"
     :licence "MIT"
     :description "Raw Common Lisp FFI interface to the Capstone disassembler"
     :depends-on (:gt :cffi :static-vectors)
-    :class :package-inferred-system
-    :defsystem-depends-on (:asdf-package-system :cffi-grovel)
+    :defsystem-depends-on (:cffi-grovel)
     :components ((:file "package")
                  (:cffi-grovel-file "grovel")
-                 (:file "capstone"))
-    :in-order-to ((test-op (load-op "capstone/test")))
-    :perform (test-op (o c) (symbol-call :capstone/test '#:test)))
+                 (:file "raw"))
+    :in-order-to ((test-op (load-op "capstone/raw-test")))
+    :perform (test-op (o c) (symbol-call :capstone/raw-test '#:test)))
 
-(defsystem "capstone/clos"
+(defsystem "capstone/raw-test"
   :author "GrammaTech"
   :licence "MIT"
-  :description "Common Lisp CLOS interface to the Capstone disassembler"
-  :depends-on (:capstone)
-  :in-order-to ((test-op (load-op "capstone/clos-test")))
-  :perform (test-op (o c) (symbol-call :capstone/clos-test '#:test)))
+  :depends-on (:gt :cffi :static-vectors :capstone/raw :stefil)
+  :components ((:file "raw-test")))

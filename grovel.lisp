@@ -12,7 +12,7 @@
 ;;;; and no official endorsement should be inferred.
 (include "stdlib.h" "capstone/capstone.h")
 
-(in-package :capstone)
+(in-package :capstone/raw)
 
 (ctype size-t "size_t")
 (cstruct cs-detail "cs_detail")

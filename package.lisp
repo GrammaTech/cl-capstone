@@ -10,7 +10,7 @@
 ;;;; contract # N68335-17-C-0700.  The content of the information does
 ;;;; not necessarily reflect the position or policy of the Government
 ;;;; and no official endorsement should be inferred.
-(defpackage :capstone
+(defpackage :capstone/raw
   (:use :common-lisp :cffi)
   (:import-from :static-vectors
                 :with-static-vector
