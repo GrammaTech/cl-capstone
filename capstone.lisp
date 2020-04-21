@@ -91,6 +91,8 @@
 
 ;;; Taken from a patch by _death.
 (defun parse-capstone-operand (string &aux p)
+  (declare (optimize (speed 3))
+           (type string string))
   (cond ((starts-with-subseq "0x" string)
          (parse-integer string :radix 16 :start 2))
         ((starts-with-subseq "[" string)
