@@ -15,6 +15,7 @@
   (:export :version
            :capstone
            :disassembly
+           :mnemonic
            ;; CAPSTONE-ENGINE class and accessors
            :capstone-engine
            :architecture
