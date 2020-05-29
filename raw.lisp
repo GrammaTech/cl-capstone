@@ -27,7 +27,7 @@
   (id :unsigned-int)
   (address :uint64)
   (insn-size :uint16)
-  (bytes :uint8 :count 16)
+  (bytes :uint8 :count 24)
   (mnemonic :char :count 32)            ; CS_MNEMONIC_SIZE
   (op-str :char :count 160)
   (cs-detail (:pointer (:struct cs-detail))))
