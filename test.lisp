@@ -48,3 +48,11 @@
          (incf counter)
          (is (equalp (pop disasm)
                      (cons (mnemonic instruction) (operands instruction)))))))))
+
+
+;;;; Parse Capstone operands tests
+(deftest parse-capstone-operand-xmm ()
+  (let ((parsed (capstone::parse-capstone-operands
+                 "xmm0, xmmword ptr [rax + 0x28]")))
+    (is (find :XMM0 parsed))
+    (is (equalp '(:+ :RAX 40) (cadr (cadadr parsed))))))

@@ -108,6 +108,8 @@
          (list :qword (parse-capstone-operand (subseq string 10))))
         ((starts-with-subseq "xword ptr " string)
          (list :qword (parse-capstone-operand (subseq string 10))))
+        ((starts-with-subseq "xmmword ptr " string)
+         (list :qword (parse-capstone-operand (subseq string 12))))
         ((starts-with-subseq "tbyte ptr " string)
          (list :tbyte (parse-capstone-operand (subseq string 10))))
         ((starts-with-subseq "cs:" string)
