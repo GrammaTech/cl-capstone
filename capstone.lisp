@@ -20,8 +20,15 @@
            :capstone-engine
            :architecture
            :mode
-           ;; CAPSTONE-INSTRUCTION class and accessors
+           ;; CAPSTONE-INSTRUCTION class, subclasses, and accessors
            :capstone-instruction
+           :capstone-instruction/x86
+           :capstone-instruction/x86-32
+           :capstone-instruction/x86-64
+           :capstone-instruction/ppc
+           :capstone-instruction/ppc-32
+           :capstone-instruction/ppc-64
+           :capstone-instruction/arm
            :id
            :address
            :bytes
@@ -86,6 +93,34 @@
    (mnemonic :initarg :mnemonic :reader mnemonic :type :keyword)
    (operands :initarg :operands :reader operands :type list)))
 
+(defclass capstone-instruction/x86 (capstone-instruction) ())
+(defclass capstone-instruction/x86-32 (capstone-instruction/x86) ())
+(defclass capstone-instruction/x86-64 (capstone-instruction/x86) ())
+(defclass capstone-instruction/ppc (capstone-instruction) ())
+(defclass capstone-instruction/ppc-32 (capstone-instruction/ppc) ())
+(defclass capstone-instruction/ppc-64 (capstone-instruction/ppc) ())
+(defclass capstone-instruction/arm (capstone-instruction) ())
+
+(defgeneric capstone-instruction-class (engine)
+  (:documentation
+  "The name of the subclass of CAPSTONE-INSTRUCTION for the
+particular architecture, or CAPSTONE-INSTRUCTION if there is such
+proper subclass.")
+  (:method ((engine capstone-engine))
+    (case (architecture engine)
+      ((:x86)
+       (case (mode engine)
+         ((:64) 'capstone-instruction/x86-64)
+         ((:32) 'capstone-instruction/x86-32)
+         (t 'capstone-instruction/x86)))
+      ((:ppc)
+       (case (mode engine)
+         ((:64) 'capstone-instruction/ppc-64)
+         ((:32) 'capstone-instruction/ppc-32)
+         (t 'capstone-instruction/ppc)))
+      ((:arm) 'capstone-instruction/arm)
+      (t 'capstone-instruction))))
+
 (defmethod print-object ((obj capstone-instruction) stream)
   (print-unreadable-object (obj stream :type t)
     (write (cons (mnemonic obj) (operands obj)) :stream stream)))
@@ -146,12 +181,13 @@
       (mapcar (lambda (s) (parse-capstone-operand (trim-whitespace s)))
               (split-sequence #\, operands))))
 
-(defun make-instruction (insn)
+(defun make-instruction (insn-class insn)
+  "Create an object of class INSN-CLASS for the instruction INSN"
   (flet ((bytes (p)
            (let ((r (make-array 16 :element-type '(unsigned-byte 8))))
              (dotimes (n 16 r)
                (setf (aref r n) (mem-aref p :uint8 n))))))
-    (make-instance 'capstone-instruction
+    (make-instance insn-class
       :id (foreign-slot-value insn '(:struct cs-insn) 'id)
       :address (foreign-slot-value insn '(:struct cs-insn) 'address)
       :size (foreign-slot-value insn '(:struct cs-insn) 'insn-size)
@@ -170,7 +206,9 @@
 Optional argument COUNT may be supplied to limit the number of
 instructions disassembled.")
   (:method ((engine capstone-engine) (bytes vector)
-            &key (address 0) (count 0 count-p))
+            &key (address 0) (count 0 count-p)
+            &aux (instruction-class
+                  (capstone-instruction-class engine)))
     (when count-p
       (check-type count integer)
       (when (zerop count) (return-from disasm)))
@@ -200,20 +238,21 @@ instructions disassembled.")
                               (* n (foreign-type-size
                                     '(:struct cs-insn)))))))
      (setf (aref result n))
-     (make-instruction insn))))
+     (make-instruction instruction-class insn))))
 
 (defmacro disasm-iter
     ((var (engine bytes &key (address 0) (return-form '(values)))) &body body)
   "Use ENGINE to disassemble BYTES one instructions at a time.
 Bind each instruction to VAR when executing BODY.  Optional argument
 ADDRESS may be used to set the starting ADDRESS during disassembly."
-  (with-gensyms (code code* size* address* instr*)
-    (once-only ((full-bytes bytes))
-      `(with-slots (handle) ,engine
+  (with-gensyms (code code* size* address* instr* insn-class)
+    (once-only ((full-bytes bytes) (eng engine))
+      `(with-slots (handle) ,eng
          (with-static-vector (,code (length ,full-bytes)
                                     :element-type '(unsigned-byte 8)
                                     :initial-contents ,full-bytes)
-           (let ((,instr* (cs-malloc handle)))
+           (let ((,instr* (cs-malloc handle))
+                 (,insn-class (capstone-instruction-class ,eng)))
              (unwind-protect
                   (with-foreign-object (,code* :pointer)
                     (with-foreign-object (,size* 'size-t)
@@ -226,5 +265,6 @@ ADDRESS may be used to set the starting ADDRESS during disassembly."
                                        (mem-ref handle 'cs-handle)
                                        ,code* ,size* ,address* ,instr*)
                                 (return ,return-form))
-                           (let ((,var (make-instruction ,instr*))) ,@body)))))
+                           (let ((,var (make-instruction ,insn-class ,instr*)))
+                             ,@body)))))
                (cs-free ,instr* 1))))))))
