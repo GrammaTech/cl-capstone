@@ -71,6 +71,10 @@
 (defmethod initialize-instance :after ((engine capstone-engine) &key)
   (with-slots (architecture mode handle) engine
     (setf handle (foreign-alloc 'cs-handle))
+    (when (consp mode)
+      (setf mode (reduce #'logior mode
+                         :key {foreign-enum-value 'cs-mode}
+                         :initial-value 0)))
     (let ((errno (cs-open architecture mode handle)))
       (unless (eql :ok errno)
         (error (make-condition 'capstone
