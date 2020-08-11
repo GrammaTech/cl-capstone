@@ -64,23 +64,23 @@
 (defclass capstone-engine ()
   ((architecture :initarg :architecture :reader architecture :type keyword
                  :initform (required-argument :architecture))
-   (mode :initarg :mode :reader mode :type keyword
+   (mode :initarg :mode :reader mode :type (or keyword list)
          :initform (required-argument :mode))
    (handle)))
 
 (defmethod initialize-instance :after ((engine capstone-engine) &key)
   (with-slots (architecture mode handle) engine
     (setf handle (foreign-alloc 'cs-handle))
-    (let ((actual-mode (if (listp mode)
+    (let* ((actual-mode (if (listp mode)
                            (reduce #'logior mode
                                    :key {foreign-enum-value 'cs-mode}
                                    :initial-value 0)
-                           mode)))
-      (let ((errno (cs-open architecture actual-mode handle)))
+                           mode))
+           (errno (cs-open architecture actual-mode handle)))
         (unless (eql :ok errno)
           (error (make-condition 'capstone
                                  :code errno
-                                 :strerr (cs-strerror errno))))))
+                                 :strerr (cs-strerror errno)))))
     #+sbcl (sb-impl::finalize engine
                               (lambda ()
                                 (with-slots (handle) engine
