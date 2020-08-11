@@ -135,12 +135,22 @@ proper subclass.")
   (declare (optimize (speed 3))
            (type string string))
   (cond ((starts-with-subseq "0x" string)
+         ;; In case it's not just a single integer, give up
+         ;; and just convert to a keyword
          (multiple-value-bind (i pos)
              (parse-integer string :radix 16 :start 2 :junk-allowed t)
            (let ((rest (trim-whitespace (subseq string pos))))
              (if (string= rest "")
                  i
                  (make-keyword (format nil "~a~a" i (string-upcase rest)))))))
+        ;; Similar to the previous case, but negative numbers
+        ((starts-with-subseq "-0x" string)
+         (multiple-value-bind (i pos)
+             (parse-integer string :radix 16 :start 3 :junk-allowed t)
+           (let ((rest (trim-whitespace (subseq string pos))))
+             (if (string= rest "")
+                 (- i)
+                 (make-keyword (format nil "-~a~a" i (string-upcase rest)))))))
         ((starts-with-subseq "[" string)
          (list :deref (parse-capstone-operand (subseq string 1 (1- (length string))))))
         ((starts-with-subseq "byte ptr " string)
