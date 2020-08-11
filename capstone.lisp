@@ -71,19 +71,20 @@
 (defmethod initialize-instance :after ((engine capstone-engine) &key)
   (with-slots (architecture mode handle) engine
     (setf handle (foreign-alloc 'cs-handle))
-    (when (consp mode)
-      (setf mode (reduce #'logior mode
-                         :key {foreign-enum-value 'cs-mode}
-                         :initial-value 0)))
-    (let ((errno (cs-open architecture mode handle)))
-      (unless (eql :ok errno)
-        (error (make-condition 'capstone
-                               :code errno
-                               :strerr (cs-strerror errno))))))
-  #+sbcl (sb-impl::finalize engine
-                            (lambda ()
-                              (with-slots (handle) engine
-                                (cs-close handle)))))
+    (let ((actual-mode (if (listp mode)
+                           (reduce #'logior mode
+                                   :key {foreign-enum-value 'cs-mode}
+                                   :initial-value 0)
+                           mode)))
+      (let ((errno (cs-open architecture actual-mode handle)))
+        (unless (eql :ok errno)
+          (error (make-condition 'capstone
+                                 :code errno
+                                 :strerr (cs-strerror errno))))))
+    #+sbcl (sb-impl::finalize engine
+                              (lambda ()
+                                (with-slots (handle) engine
+                                  (cs-close handle))))))
 
 (defmethod print-object ((obj capstone-engine) stream)
   (print-unreadable-object (obj stream :type t :identity t)
