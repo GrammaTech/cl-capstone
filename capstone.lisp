@@ -142,7 +142,7 @@ proper subclass.")
         nil)))
 
 ;;; Taken from a patch by _death.
-(defun parse-capstone-operand (string &aux p (len (length string)))
+(defun parse-capstone-operand (string &aux p)
   (declare (optimize (speed 3))
            (type string string))
   (flet ((%decode-with-int (start radix neg?)
