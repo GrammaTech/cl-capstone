@@ -158,7 +158,7 @@ proper subclass.")
                        i
                        (let ((reg (parse-register rest)))
                          (if reg (list i reg)
-                             (make-keyword (format nil "~a~a" i (string-upcase rest)))))))))))
+                             (make-keyword (string-upcase string))))))))))
     (cond ((starts-with-subseq "0x" string)
            (%decode-with-int 2 16 nil))
           ((starts-with-subseq "-0x" string)

@@ -12,6 +12,7 @@
 ;;;; and no official endorsement should be inferred.
 (defpackage :capstone/test
   (:use :gt :cffi :capstone/raw :capstone :stefil)
+  (:import-from :capstone :parse-capstone-operand)
   (:export :test))
 (in-package :capstone/test)
 (in-readtable :curry-compose-reader-macros)
@@ -56,3 +57,16 @@
                  "xmm0, xmmword ptr [rax + 0x28]")))
     (is (find :XMM0 parsed))
     (is (equalp '(:+ :RAX 40) (cadr (cadadr parsed))))))
+
+(deftest parse-capstone-operand.integers ()
+  (is (equal (parse-capstone-operand "10") 10))
+  (is (equal (parse-capstone-operand "-9") -9))
+  (is (equal (parse-capstone-operand "0x17") #x17))
+  (is (equal (parse-capstone-operand "0(r1)") '(0 :r1)))
+  (is (equal (parse-capstone-operand "-2(r2)") '(-2 :r2)))
+  (is (equal (parse-capstone-operand "0x10(r3)") '(#x10 :r3)))
+  (is (equal (parse-capstone-operand "-0x21(r4)") '(#x-21 :r4)))
+  (is (equal (parse-capstone-operand "1A") :|1A|))
+  (is (equal (parse-capstone-operand "-2B") :|-2B|))
+  (is (equal (parse-capstone-operand "0x1H") :|0X1H|))
+  (is (equal (parse-capstone-operand "-0x") :|-0X|)))
