@@ -142,6 +142,11 @@ proper subclass.")
         nil)))
 
 ;;; Taken from a patch by _death.
+;;;
+;;; The fallback behavior of decoding an operand is to just
+;;; turn it into a keyword.  In general, users should not
+;;; decode these, but instead augment operand parsing so
+;;; those cases are covered.
 (defun parse-capstone-operand (string &aux p)
   (declare (optimize (speed 3))
            (type string string))
