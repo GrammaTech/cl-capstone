@@ -65,7 +65,12 @@
   (is (equal (parse-capstone-operand "0(r1)") '(0 :r1)))
   (is (equal (parse-capstone-operand "-2(r2)") '(-2 :r2)))
   (is (equal (parse-capstone-operand "0x10(r3)") '(#x10 :r3)))
-  (is (equal (parse-capstone-operand "-0x21(r4)") '(#x-21 :r4)))
+  (is (equal (parse-capstone-operand "-0x21(r4)") '(#x-21 :r4))))
+
+;;; When we can't figure out what the operand means,
+;;; "fail soft" and turn it into a keyword.  Feel free
+;;; to break or change these tests if you improve the parsing.
+(deftest parse-capstone-operand.integer-bad-syntax ()
   (is (equal (parse-capstone-operand "1A") :|1A|))
   (is (equal (parse-capstone-operand "-2B") :|-2B|))
   (is (equal (parse-capstone-operand "0x1H") :|0X1H|))
