@@ -11,7 +11,7 @@
 ;;;; not necessarily reflect the position or policy of the Government
 ;;;; and no official endorsement should be inferred.
 (defpackage :capstone
-  (:use :gt :cffi :static-vectors :capstone/raw)
+  (:use :gt :cffi :static-vectors :capstone/raw :cl-ppcre)
   (:export :version
            :capstone
            :disassembly
@@ -29,6 +29,7 @@
            :capstone-instruction/ppc-32
            :capstone-instruction/ppc-64
            :capstone-instruction/arm
+           :capstone-instruction/thumb
            :id
            :address
            :bytes
@@ -96,8 +97,9 @@
    (address :initarg :address :reader address :type unsigned-integer)
    (size :initarg :size :reader size :type fixnum)
    (bytes :initarg :bytes :reader bytes :type '(simple-array (unsigned-byte 8)))
+   (op-str :initarg :op-str :reader op-str :type string)
    (mnemonic :initarg :mnemonic :reader mnemonic :type :keyword)
-   (operands :initarg :operands :reader operands :type list)))
+   ))
 
 (defclass capstone-instruction/x86 (capstone-instruction) ())
 (defclass capstone-instruction/x86-32 (capstone-instruction/x86) ())
@@ -106,6 +108,7 @@
 (defclass capstone-instruction/ppc-32 (capstone-instruction/ppc) ())
 (defclass capstone-instruction/ppc-64 (capstone-instruction/ppc) ())
 (defclass capstone-instruction/arm (capstone-instruction) ())
+(defclass capstone-instruction/thumb (capstone-instruction/arm) ())
 
 (defgeneric capstone-instruction-class (engine)
   (:documentation
@@ -126,105 +129,167 @@ proper subclass.")
            ((member :64 mode) 'capstone-instruction/ppc-64)
            ((member :32 mode) 'capstone-instruction/ppc-32)
            (t 'capstone-instruction/ppc))))
-      ((:arm) 'capstone-instruction/arm)
+      ((:arm) 
+       (case (mode engine)
+         ((:arm) 'capstone-instruction/arm)
+         ((:thumb) 'capstone-instruction/thumb)))
       (t 'capstone-instruction))))
 
 (defmethod print-object ((obj capstone-instruction) stream)
   (print-unreadable-object (obj stream :type t)
     (write (cons (mnemonic obj) (operands obj)) :stream stream)))
+;    (write (cons (mnemonic obj) (cons (op-str obj) (operands obj))) :stream stream)))
 
-(defun parse-register (str)
-  "Recognize (r<n>) and parse as a :r<n> keyword.  Otherwise, NIL"
-  (setf str (string-upcase str))
-  (let ((len (length str)))
-    (if (and (> len 2)
-             (string= str "(R" :end1 2)
-             (char= (elt str (1- len)) #\)))
-        (make-keyword (subseq str 1 (1- len)))
-        nil)))
+(defgeneric operands (insn)
+  (:documentation
+  "Method for extracting the operands information from a
+CAPSTONE-INSTRUCTION.  May vary with architecture."))
 
-;;; Taken from a patch by _death.
-;;;
-;;; The fallback behavior of decoding an operand is to just
-;;; turn it into a keyword.  In general, users should not
-;;; decode these, but instead augment operand parsing so
-;;; those cases are covered.
-(defun parse-capstone-operand (string &aux p)
-  (declare (optimize (speed 3))
-           (type string string))
-  (flet ((%decode-with-int (start radix neg?)
-           (multiple-value-bind (i pos)
-               (parse-integer string :radix radix
-                                     :start start
-                                     :junk-allowed t)
-             (if (null i)
-                 (make-keyword (string-upcase string))
-                 (let ((i (if neg? (- i) i))
-                       (rest (trim-whitespace (subseq string pos))))
-                   (if (string= rest "")
-                       i
-                       (let ((reg (parse-register rest)))
-                         (if reg (list i reg)
-                             (make-keyword (string-upcase string))))))))))
-    (cond ((starts-with-subseq "0x" string)
-           (%decode-with-int 2 16 nil))
-          ((starts-with-subseq "-0x" string)
-           (%decode-with-int 3 16 t))
-          ((and (starts-with-subseq "-" string)
-                (> (length string) 1)
-                (digit-char-p (elt string 1)))
-           (%decode-with-int 1 10 t))
-          ((digit-char-p (elt string 0))
-           (%decode-with-int 0 10 nil))
-          ((starts-with-subseq "[" string)
-           (list :deref (parse-capstone-operand (subseq string 1 (1- (length string))))))
-          ((starts-with-subseq "byte ptr " string)
-           (list :byte (parse-capstone-operand (subseq string 9))))
-          ((starts-with-subseq "word ptr " string)
-           (list :word (parse-capstone-operand (subseq string 9))))
-          ((starts-with-subseq "dword ptr " string)
-           (list :dword (parse-capstone-operand (subseq string 10))))
-          ((starts-with-subseq "qword ptr " string)
-           (list :qword (parse-capstone-operand (subseq string 10))))
-          ((starts-with-subseq "xword ptr " string)
-           (list :qword (parse-capstone-operand (subseq string 10))))
-          ((starts-with-subseq "xmmword ptr " string)
-           (list :qword (parse-capstone-operand (subseq string 12))))
-          ((starts-with-subseq "tbyte ptr " string)
-           (list :tbyte (parse-capstone-operand (subseq string 10))))
-          ((starts-with-subseq "cs:" string)
-           (list (list :seg :cs) (parse-capstone-operand (subseq string 3))))
-          ((starts-with-subseq "ds:" string)
-           (list (list :seg :ds) (parse-capstone-operand (subseq string 3))))
-          ((starts-with-subseq "es:" string)
-           (list (list :seg :es) (parse-capstone-operand (subseq string 3))))
-          ((starts-with-subseq "fs:" string)
-           (list (list :seg :fs) (parse-capstone-operand (subseq string 3))))
-          ((starts-with-subseq "gs:" string)
-           (list (list :seg :gs) (parse-capstone-operand (subseq string 3))))
-          ((setq p (search " + " string))
-           (list :+
-                 (parse-capstone-operand (subseq string 0 p))
-                 (parse-capstone-operand (subseq string (+ p 3)))))
-          ((setq p (search " - " string))
-           (list :-
-                 (parse-capstone-operand (subseq string 0 p))
-                 (parse-capstone-operand (subseq string (+ p 3)))))
-          ((setq p (search "*" string))
-           (list :*
-                 (parse-capstone-operand (subseq string 0 p))
-                 (parse-capstone-operand (subseq string (1+ p)))))
-;;          ((every #'digit-char-p string)
-;;           (parse-integer string))
-          (t
-           (make-keyword (string-upcase string))))))
+(defmethod operands ((insn capstone-instruction))
+  (parse-operands-list insn (opstring-to-tokens insn (op-str insn))))
 
-;;; Adapted from a patch by _death.
-(defun parse-capstone-operands (operands)
-  (if (equal operands "")
-      nil
-      (mapcar (lambda (s) (parse-capstone-operand (trim-whitespace s)))
-              (split-sequence #\, operands))))
+(defgeneric parse-operand (insn string)
+  (:documentation
+   "Method to convert single token from string format to token,
+   specialized for the architecture.  This may include, for example,
+   converting numeric values in various bases, recognizing known
+   register names, etc."))
+
+(defmethod parse-operand ((insn capstone-instruction/x86) tok)
+  (let ((up (string-upcase tok)))
+    (cond ((cl-ppcre:scan "^(([ER]?(AX|BX|CX|DX|SI|DI|BP|SP|IP))|AL|AH)$" up)
+           (make-keyword up))
+          ((cl-ppcre:scan "^XMM\\d+$" up)
+           (make-keyword up))
+          ((cl-ppcre:scan "^(BYTE|WORD|DWORD|QWORD|XWORD|XMMWORD|TBYTE|PTR)$" up)
+           (make-keyword up))
+          ((cl-ppcre:scan "^[-+]?0?x[0-9a-fA-F]+$" tok)
+           (* (if (char= (elt tok 1) #\-) -1 1)
+              (parse-integer tok :start (1+ (position #\x tok)) :radix 16)))
+          ((cl-ppcre:scan "^[-+]?[0-9]+$" tok)
+           (parse-integer tok :start 0 :radix 10))
+          ((cl-ppcre:scan "^[-+]$" tok)
+           (make-keyword tok))
+          ((find up '("[" "]" "{" "}" "LSL" "LSR" "ASR" "ROR") :test 'string=)
+           (make-keyword up))
+          ((string= tok "!") :WBACK)
+          ((string= tok ",") nil)
+          (t tok))))
+
+(defmethod parse-operand ((insn capstone-instruction/arm) tok)
+  (let ((up (string-upcase tok)))
+    (cond ((cl-ppcre:scan "^#[-+]?[0-9]+$" tok)
+           (parse-integer tok :start 1 :radix 10))
+          ((cl-ppcre:scan "^#[-+]?0?x[0-9a-fA-F]+$" tok)
+           (* (if (char= (elt tok 1) #\-) -1 1)
+              (parse-integer tok :start (1+ (cl-ppcre:scan "x" tok)) :radix 16)))
+          ((cl-ppcre:scan "^((R[0-9][0-9]?)|SB|IP|SP|LR|PC)$" up)
+           (make-keyword up))
+          ((cl-ppcre:scan "^(-((R[0-9][0-9]?)|SB|IP|SP|LR|PC))$" up)
+           (list :NEG (make-keyword (subseq up 1))))
+          ((find up '("[" "]" "{" "}" "LSL" "LSR" "ASR" "ROR") :test 'string=)
+           (make-keyword up))
+          ((string= tok "!") :WBACK)
+          ((string= tok ",") nil)
+          (t tok))))
+
+(defgeneric opstring-to-tokens (insn string)
+  (:documentation
+   "Method for parsing operand string to list of tokens, with distinct
+methods per architecture."))
+
+(defmethod parse-operands-list ((insn capstone-instruction) string)
+  string)
+
+(defmethod opstring-to-tokens ((insn capstone-instruction/arm) string)
+  (mapcar {parse-operand insn}
+          (remove "" (cl-ppcre:split "[, ]+|(\\[)|(\\])|([{}!])" string
+                                     :with-registers-p t :omit-unmatched-p t)
+                  :test 'string=)
+  )
+)
+
+(defmethod opstring-to-tokens ((insn capstone-instruction/x86) string)
+  (mapcar {parse-operand insn}
+          (remove "" (cl-ppcre:split "[, ]+|(\\[)|(\\])|([{}!])" string
+                                     :with-registers-p t :omit-unmatched-p t)
+                  :test 'string=)))
+
+(defgeneric parse-operands-list (insn oplist)
+  (:documentation
+   "Method for parsing operand list, with distinct methods per
+architecture."))
+
+(defmethod parse-operands-list ((insn capstone-instruction) oplist)
+  oplist)
+
+(defmethod parse-operands-list ((insn capstone-instruction/x86) oplist)
+;  (format t "Parsing list ~S:~%" oplist)
+  (let ((tok (car oplist))
+        (rest (cdr oplist))
+        (x86regs '(:AL :AH :AX :BX :CX :DX :SI :DI :BP :SP :IP
+                   :EAX :EBX :ECX :EDX :ESI :EDI :EBP :ESP :EIP
+                   :RAX :RBX :RCX :RDX :RSI :RDI :RBP :RSP :RIP))
+        idx)
+    (cond
+     ((null oplist)
+;      (format t "  Terminal case~%")
+      nil)
+     ((and (find (cadr oplist) '(:+ :-))
+           (find tok x86regs)
+           (numberp (caddr oplist)))
+;      (format t "  Reg const offset case~%")
+      `((,(cadr oplist)
+          ,@(parse-operands-list insn (list tok))
+          ,@(parse-operands-list insn (list (caddr oplist))))
+        ,@(parse-operands-list insn (cdddr oplist))))
+     ((and (eq tok :|[|)
+           (setf idx (position :|]| rest :from-end t)))
+;      (format t "  Deref case~%")
+      `((:DEREF ,@(parse-operands-list insn (subseq rest 0 idx)))
+        ,@(parse-operands-list insn (subseq rest (1+ idx)))))
+     ((and (eq (cadr oplist) :PTR)
+           (find tok '(:BYTE :WORD :DWORD :QWORD :XWORD :XMMWORD :TBYTE))
+           (setf idx (position :|]| rest)))
+;      (format t "  PTR case~%")
+      `((,tok
+         ,@(parse-operands-list insn (subseq rest 1 (1+ idx))))
+        ,@(parse-operands-list insn (subseq rest (1+ idx)))))
+     (t
+;      (format t "  Default case~%")
+      (cons tok (parse-operands-list insn rest))))))
+
+(defmethod parse-operands-list ((insn capstone-instruction/arm) oplist)
+;  (format t "Parsing list ~S:~%" oplist)
+  (let ((tok (car oplist))
+        (rest (cdr oplist))
+        idx)
+    (cond
+     ((null oplist)
+;      (format t "  Terminal case~%")
+      nil)
+     ((and (find (cadr oplist) '(:LSL :LSR :ASR :ROR)) (cddr oplist))
+;      (format t "  Shift case~%")
+      `((,(cadr oplist)
+         ,@(parse-operands-list insn (list tok))
+         ,@(parse-operands-list insn (list (caddr oplist))))
+        ,@(parse-operands-list insn (cdddr oplist))))
+     ((and (eq tok :|[|)
+           (setf idx (position :|]| rest :from-end t)))
+;      (format t "  Deref case~%")
+      `((:DEREF ,@(if (> idx 1)
+                      (list (cons :+ (parse-operands-list insn (subseq rest 0 idx))))
+                      (parse-operands-list insn (subseq rest 0 idx))))
+        ,@(parse-operands-list insn (subseq rest (1+ idx)))))
+     ((and (eq tok :|{|)
+           (setf idx (position :|}| rest :from-end t)))
+;      (format t "  Regset case~%")
+      `((:REGSET
+         ,(parse-operands-list insn (subseq rest 0 idx)))
+        ,@(parse-operands-list insn (subseq rest (1+ idx)))))
+     (t
+;      (format t "  Default case~%")
+      (cons tok (parse-operands-list insn rest))))))
 
 (defgeneric capstone-insn-to-string (insn)
   (:documentation "Convert a capstone instruction object to a string
@@ -248,9 +313,8 @@ that is suitable for use by keystone."))
                       (string-upcase)
                       (foreign-string-to-lisp)
                       (foreign-slot-value insn '(:struct cs-insn) 'mnemonic))
-      :operands (nest (parse-capstone-operands)
-                      (foreign-string-to-lisp)
-                      (foreign-slot-value insn '(:struct cs-insn) 'op-str)))))
+      :op-str (foreign-string-to-lisp
+               (foreign-slot-value insn '(:struct cs-insn) 'op-str)))))
 
 (defgeneric disasm (engine bytes &key address count)
   (:documentation
