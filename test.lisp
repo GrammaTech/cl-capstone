@@ -25,13 +25,15 @@
 
 (deftest simple-disasm ()
   (let ((engine (make-instance 'capstone-engine :architecture :x86 :mode :64)))
+    (is (equalp (disasm engine #(#x90 #x90) :count 0) nil))
     (is (every «and [{eql :NOP} #'mnemonic] {typep _ 'capstone-instruction}»
                (disasm engine #(#x90 #x90))))
     (nest (is)
           (equalp '((:PUSH :RBP)
                     (:MOV :RAX (:QWORD (:DEREF (:+ :RIP 5048))))))
           (map 'list «cons #'mnemonic #'operands»
-               (disasm engine #(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00))))))
+               (disasm engine #(#x55 #x48 #x8b #x05 #xb8 #x13 #x00 #x00))))
+))
 
 (deftest simple-disasm-iter ()
   (let ((engine (make-instance 'capstone-engine :architecture :x86 :mode :64)))
@@ -97,15 +99,16 @@
              '(:XMM0 (:XMMWORD (:DEREF (:+ :RAX 40))))))
 )
 
-;;; When we can't figure out what the operand means,
-;;; "fail soft" and turn it into a keyword.  Feel free
-;;; to break or change these tests if you improve the parsing.
-(deftest parse-capstone-operand.integer-bad-syntax ()
+;;; When we can't figure out what the operand means, it is left as a string.
+;;; This gives us a clear indication of a syntax error while still allowing
+;;; the result to be human-readable.
+(deftest parse-capstone-operand.bad-syntax.x86 ()
   (let ((insn (make-instance 'capstone-instruction/x86)))
     (is (equal (opstring-to-tokens insn "1A") '("1A")))
     (is (equal (opstring-to-tokens insn "-2B") '("-2B")))
     (is (equal (opstring-to-tokens insn "0x1H") '("0x1H")))
     (is (equal (opstring-to-tokens insn "-0x") '("-0x")))
+    (is (equal (opstring-to-tokens insn "ROR") '("ROR")))
 ))
 
 ;;; ARM parse tests
@@ -119,6 +122,7 @@
     (is (equal (opstring-to-tokens insn "r2, [pc, #0x10]") '(:R2 :|[| :PC 16 :|]|)))
     (is (equal (opstring-to-tokens insn "r2, [pc, #-0x10]") '(:R2 :|[| :PC -16 :|]|)))
     (is (equal (opstring-to-tokens insn "r2, [r8], -r4") '(:R2 :|[| :R8 :|]| (:NEG :R4))))
+    (is (equal (opstring-to-tokens insn "sp!, {r0, r1, r2, r3}") '(:SP :WBACK :|{| :R0 :R1 :R2 :R3 :|}|)))
 ))
 
 (deftest operands.arm ()
@@ -144,3 +148,14 @@
    (is (equal (operands (make-instance 'capstone-instruction/thumb :mnemonic :push :op-str "{r4, lr}")) '((:REGSET (:R4 :LR)))))
 )
 
+;;; When we can't figure out what the operand means, it is left as a string.
+;;; This gives us a clear indication of a syntax error while still allowing
+;;; the result to be human-readable.
+(deftest parse-capstone-operand.bad-syntax.arm ()
+  (let ((insn (make-instance 'capstone-instruction/arm)))
+    (is (equal (opstring-to-tokens insn "1A") '("1A")))
+    (is (equal (opstring-to-tokens insn "-2B") '("-2B")))
+    (is (equal (opstring-to-tokens insn "0x1H") '("0x1H")))
+    (is (equal (opstring-to-tokens insn "-0x") '("-0x")))
+    (is (equal (opstring-to-tokens insn "BYTE PTR") '("BYTE" "PTR")))
+))
