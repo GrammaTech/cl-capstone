@@ -29,7 +29,8 @@
            :capstone-instruction/ppc-32
            :capstone-instruction/ppc-64
            :capstone-instruction/arm
-           :capstone-instruction/thumb
+           :capstone-instruction/arm-A32
+           :capstone-instruction/arm-T32
            :id
            :address
            :bytes
@@ -108,7 +109,9 @@
 (defclass capstone-instruction/ppc-32 (capstone-instruction/ppc) ())
 (defclass capstone-instruction/ppc-64 (capstone-instruction/ppc) ())
 (defclass capstone-instruction/arm (capstone-instruction) ())
-(defclass capstone-instruction/thumb (capstone-instruction/arm) ())
+(defclass capstone-instruction/arm-A64 (capstone-instruction/arm) ())
+(defclass capstone-instruction/arm-A32 (capstone-instruction/arm) ())
+(defclass capstone-instruction/arm-T32 (capstone-instruction/arm) ())
 
 (defgeneric capstone-instruction-class (engine)
   (:documentation
@@ -131,8 +134,8 @@ proper subclass.")
            (t 'capstone-instruction/ppc))))
       ((:arm) 
        (case (mode engine)
-         ((:arm) 'capstone-instruction/arm)
-         ((:thumb) 'capstone-instruction/thumb)))
+         ((:arm) 'capstone-instruction/arm-A32)
+         ((:thumb) 'capstone-instruction/arm-T32)))
       (t 'capstone-instruction))))
 
 (defmethod print-object ((obj capstone-instruction) stream)
@@ -181,10 +184,12 @@ CAPSTONE-INSTRUCTION.  May vary with architecture."))
           ((cl-ppcre:scan "^#[-+]?0?x[0-9a-fA-F]+$" tok)
            (* (if (char= (elt tok 1) #\-) -1 1)
               (parse-integer tok :start (1+ (cl-ppcre:scan "x" tok)) :radix 16)))
-          ((cl-ppcre:scan "^((R[0-9][0-9]?)|SB|IP|SP|LR|PC)$" up)
+          ((cl-ppcre:scan "^((R[0-9][0-9]?)|SB|IP|SP|FP|LR|PC)$" up)
            (make-keyword up))
-          ((cl-ppcre:scan "^(-((R[0-9][0-9]?)|SB|IP|SP|LR|PC))$" up)
+          ((cl-ppcre:scan "^(-((R[0-9][0-9]?)|SB|IP|SP|FP|LR|PC))$" up)
            (list :NEG (make-keyword (subseq up 1))))
+          ((cl-ppcre:scan "^(EQ|NE|CS|CC|MI|PL|VS|VC|HI|LS|GE|LT|GT|LE|AL)$" up)
+           (make-keyword up))
           ((find up '("[" "]" "{" "}" "LSL" "LSR" "ASR" "ROR") :test 'string=)
            (make-keyword up))
           ((string= tok "!") :WBACK)
@@ -340,7 +345,7 @@ instructions disassembled.")
        (unless (and (numberp count) (> count 0))
          (let ((errno (cs-errno handle)))
            (case errno
-             (:ok (warn "Empty disassembly of ~S." code))
+             (:ok (warn "Empty disassembly of ~S at ~x." code address))
              (t (error (make-condition 'disassembly
                                        :code errno
                                        :strerr (cs-strerror errno)
