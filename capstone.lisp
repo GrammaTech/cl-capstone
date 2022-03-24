@@ -302,26 +302,20 @@ that is suitable for use by keystone."))
 
 (defun make-instruction (insn-class insn)
   "Create an object of class INSN-CLASS for the instruction INSN"
-  (labels ((drop-trailing-bytes (l)
-             (take-while [#'not #'zerop] l))
-           (bytes (l)
-             (make-array (length l)
-                         :element-type '(unsigned-byte 8)
-                         :initial-contents l))
-           (char-list-to-string (l)
-             (coerce (mapcar #'code-char (drop-trailing-bytes l)) 'string)))
+  (flet ((bytes (p)
+           (let ((r (make-array 16 :element-type '(unsigned-byte 8))))
+             (dotimes (n 16 r)
+               (setf (aref r n) (mem-aref p :uint8 n))))))
     (make-instance insn-class
       :id (foreign-slot-value insn '(:struct cs-insn) 'id)
       :address (foreign-slot-value insn '(:struct cs-insn) 'address)
       :size (foreign-slot-value insn '(:struct cs-insn) 'insn-size)
-      :bytes (nest (bytes)
-                   (drop-trailing-bytes)
-                   (foreign-slot-value insn '(:struct cs-insn) 'bytes))
+      :bytes (bytes (foreign-slot-value insn '(:struct cs-insn) 'bytes))
       :mnemonic (nest (make-keyword)
                       (string-upcase)
-                      (char-list-to-string)
+                      (foreign-string-to-lisp)
                       (foreign-slot-value insn '(:struct cs-insn) 'mnemonic))
-      :op-str (char-list-to-string
+      :op-str (foreign-string-to-lisp
                (foreign-slot-value insn '(:struct cs-insn) 'op-str)))))
 
 (defgeneric disasm (engine bytes &key address count)
